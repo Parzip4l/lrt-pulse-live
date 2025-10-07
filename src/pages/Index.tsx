@@ -12,7 +12,7 @@ const Index = () => {
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/20">
       <DashboardHeader />
       
-      <main className="container mx-auto px-6 py-8">
+      <main className="container mx-auto px-6 -mt-[50px] relative z-10">
         {/* KPI Cards - Bento Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           <KPICard
