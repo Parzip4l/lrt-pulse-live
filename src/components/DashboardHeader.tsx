@@ -1,4 +1,4 @@
-import { Bell, User, Home, Activity, Shield, FileText, Clock, ChevronDown } from "lucide-react";
+import { Bell, User, Home, ChevronRight, Clock, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export const DashboardHeader = () => {
@@ -28,36 +28,14 @@ export const DashboardHeader = () => {
               </div>
             </div>
 
-            {/* Navigation Menu */}
-            <nav className="flex items-center gap-1">
-              <Button 
-                variant="ghost" 
-                className="text-white hover:bg-white/20 gap-2 px-4"
-              >
-                <Home className="h-4 w-4" />
-                <span>Dashboard</span>
-              </Button>
-              <Button 
-                variant="ghost" 
-                className="text-white/80 hover:bg-white/20 hover:text-white gap-2 px-4"
-              >
-                <Activity className="h-4 w-4" />
-                <span>QSHE</span>
-              </Button>
-              <Button 
-                variant="ghost" 
-                className="text-white/80 hover:bg-white/20 hover:text-white gap-2 px-4"
-              >
-                <Shield className="h-4 w-4" />
-                <span>Security</span>
-              </Button>
-              <Button 
-                variant="ghost" 
-                className="text-white/80 hover:bg-white/20 hover:text-white gap-2 px-4"
-              >
-                <FileText className="h-4 w-4" />
-                <span>Laporan</span>
-              </Button>
+            {/* Breadcrumb Navigation */}
+            <nav className="flex items-center gap-2 text-sm text-white/90">
+              <Home className="h-4 w-4" />
+              <span>Monitoring Dashboard</span>
+              <ChevronRight className="h-4 w-4" />
+              <span>Dashboard</span>
+              <ChevronRight className="h-4 w-4" />
+              <span className="text-white font-medium">Realtime</span>
             </nav>
 
             {/* User Profile Section */}
@@ -82,7 +60,7 @@ export const DashboardHeader = () => {
       {/* Dashboard Title Section */}
       <div className="container mx-auto px-6 py-8">
         <div className="flex items-center justify-between">
-          <h2 className="text-4xl font-bold text-white">Dashboard</h2>
+          <h2 className="text-4xl font-bold text-white">REALTIME</h2>
           <div className="flex items-center gap-2 text-white/90">
             <Clock className="h-5 w-5" />
             <span className="text-sm font-medium">{currentDate}</span>
