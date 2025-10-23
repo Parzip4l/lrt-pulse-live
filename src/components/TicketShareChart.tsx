@@ -10,7 +10,7 @@ const data = [
 
 export const TicketShareChart = () => {
   return (
-    <Card className="glass hover-lift p-6 border-0">
+    <Card className="glass hover-lift p-6 border-0" >
       <h3 className="text-lg font-semibold mb-6">Ticket Type Share</h3>
       
       <ResponsiveContainer width="100%" height={250}>

@@ -33,7 +33,7 @@ export const PerformanceChart = () => {
   }, [dateRange]);
 
   return (
-    <Card className="glass hover-lift p-6 border-0 col-span-full">
+    <Card className="glass hover-lift p-6 border-0 col-span-full lg:col-span-4">
       <div className="flex items-center justify-between mb-6">
         <h3 className="text-lg font-semibold">On-Time Performance</h3>
         <Button variant="outline" size="sm" className="gap-2">

@@ -64,7 +64,7 @@ export const TrainRouteVisualization = () => {
   }, []);
 
   return (
-    <Card className="glass hover-lift p-6 border-0 col-span-full lg:col-span-2">
+    <Card className="hover-lift p-6 border-0 col-span-full lg:col-span-4">
       <h3 className="text-lg font-semibold mb-6">Live Train Positions</h3>
       
       <div className="relative">

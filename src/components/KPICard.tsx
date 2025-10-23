@@ -14,7 +14,7 @@ interface KPICardProps {
 
 export const KPICard = ({ title, value, subtitle, icon: Icon, trend }: KPICardProps) => {
   return (
-    <Card className="glass hover-lift p-6 border-0">
+    <Card className="hover-lift p-6 border-0">
       <div className="flex items-start justify-between">
         <div className="space-y-2">
           <p className="text-sm font-medium text-muted-foreground">{title}</p>
