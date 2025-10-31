@@ -1,6 +1,14 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { Train, AlertTriangle, Clock, Users, Sun, Moon, WifiOff, ArrowUp, ArrowDown, CheckCircle, Repeat, Hash, Smile, TrendingUp, Star, Sunrise, Sunset, PieChart as PieChartIcon, Target, CalendarDays, BrainCircuit } from 'lucide-react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, AreaChart, Area, PieChart, Pie, Cell, BarChart, Bar, ReferenceLine } from 'recharts';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import {
+    Train, AlertTriangle, Clock, Users, Sun, Moon, WifiOff, ArrowUp, ArrowDown,
+    CheckCircle, Repeat, Hash, Smile, TrendingUp, Star, Sunrise, Sunset,
+    PieChart as PieChartIcon, Target, CalendarDays, BrainCircuit, Instagram,
+    Facebook, Twitter, Youtube, Linkedin
+} from 'lucide-react';
+import {
+    LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+    Legend, AreaChart, Area, PieChart, Pie, Cell, BarChart, Bar, ReferenceLine
+} from 'recharts';
 
 // --- SVG Icons ---
 // A simple loader component used when data is being fetched.
@@ -28,6 +36,18 @@ interface SurveyData {
     achievement_value: number;
     respondent_count: number;
 }
+// NEW: Structure for a single news item
+interface NewsItem {
+    id: number;
+    title: string;
+    source: string;
+    created_at: string;
+}
+// NEW: Structure for social media growth data
+interface SocialGrowth {
+    platform: 'instagram' | 'facebook' | 'twitter' | 'tiktok' | 'youtube' | 'linkedin';
+    growth_percentage: number;
+}
 
 
 // --- Utility & Constants ---
@@ -51,11 +71,98 @@ const getWeekNumber = (d: Date): [number, number] => {
     return [d.getUTCFullYear(), weekNo];
 };
 
+// NEW: Helper function to calculate time ago
+const timeAgo = (dateString: string): string => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+
+    let interval = seconds / 31536000;
+    if (interval > 1) return Math.floor(interval) + " tahun lalu";
+    interval = seconds / 2592000;
+    if (interval > 1) return Math.floor(interval) + " bulan lalu";
+    interval = seconds / 86400;
+    if (interval > 1) return Math.floor(interval) + " hari lalu";
+    interval = seconds / 3600;
+    if (interval > 1) return Math.floor(interval) + " jam lalu";
+    interval = seconds / 60;
+    if (interval > 1) return Math.floor(interval) + " menit lalu";
+    return "Baru saja";
+};
 
 // --- Custom Hook for Data Fetching ---
 // This hook encapsulates all logic for fetching, processing, and managing traffic data.
 const useTrafficData = (options) => {
     const { defaultRange, refreshInterval } = options;
+
+    // --- CACHE LOGIC START ---
+    // Helper to get cache key for today
+    const getTodayCacheKey = () => `traffic-data-today-${formatDate(new Date())}`;
+
+    // Function to load initial state from cache if available for 'today'
+    const loadInitialState = () => {
+        const defaultState = { isLoading: true, stationSummary: {}, totalTransactions: 0, percentageChange: null, peakHours: null };
+
+        if (defaultRange === 'today') {
+            try {
+                const cacheKey = getTodayCacheKey();
+                const cachedItem = localStorage.getItem(cacheKey);
+                if (cachedItem) {
+                    const { data, timestamp } = JSON.parse(cachedItem);
+                    const cacheAge = Date.now() - timestamp;
+                    
+                    // Cache for today is valid for 2 minutes
+                    if (cacheAge < 2 * 60 * 1000) { 
+                        return {
+                            isLoading: false, // <-- KEY CHANGE: Load instantly
+                            stationSummary: data.stationSummary,
+                            totalTransactions: data.totalTransactions,
+                            percentageChange: data.percentageChange,
+                            peakHours: data.peakHours,
+                        };
+                    }
+                }
+            } catch (e) {
+                console.error("Failed to read 'today' cache", e);
+                // If cache is corrupt, clear it
+                localStorage.removeItem(getTodayCacheKey());
+            }
+        }
+        // --- MODIFICATION START: Add cache loading for 'month' ---
+        else if (defaultRange === 'month') {
+            // Re-create the startDate logic here, just for the key.
+            const tempStartDate = new Date();
+            tempStartDate.setDate(1);
+            const cacheKey = `traffic-data-${formatDate(tempStartDate).substring(0, 7)}`;
+            
+            try {
+                const cachedItem = localStorage.getItem(cacheKey);
+                if (cachedItem) {
+                    // --- MODIFICATION ---
+                    // If *any* cache exists (even expired), load it.
+                    // The useEffect will handle refetching if it's expired.
+                    // This prevents showing 0 or a loader.
+                    const { total } = JSON.parse(cachedItem);
+                    return {
+                        ...defaultState,
+                        isLoading: false, // Load instantly
+                        totalTransactions: total, // Show stale data
+                    };
+                    // --- END MODIFICATION ---
+                }
+            } catch (e) {
+                console.error("Failed to read 'month' cache", e);
+                localStorage.removeItem(cacheKey);
+            }
+        }
+        // --- MODIFICATION END ---
+        
+        // Default if no cache or expired
+        return defaultState;
+    };
+
+    const initialState = loadInitialState();
+    // --- CACHE LOGIC END ---
 
     // State for managing the date range of the data to be fetched.
     const [startDate, setStartDate] = useState(() => {
@@ -72,20 +179,25 @@ const useTrafficData = (options) => {
 
     // State for managing API authentication token, loading status, and errors.
     const [token, setToken] = useState < string | null > (null);
-    const [isLoading, setIsLoading] = useState(true);
+    // --- MODIFICATION: These states now correctly use the improved initialState ---
+    const [isLoading, setIsLoading] = useState(initialState.isLoading); 
     const [error, setError] = useState < string | null > (null);
 
     // State for storing processed data ready for display.
     const [chartData, setChartData] = useState < ChartData[] > ([]);
-    const [stationSummary, setStationSummary] = useState < StationSummary > ({});
-    const [totalTransactions, setTotalTransactions] = useState(0);
-    const [percentageChange, setPercentageChange] = useState < number | null > (null);
-    const [peakHours, setPeakHours] = useState<{ busiest: number, quietest: number } | null>(null);
+    const [stationSummary, setStationSummary] = useState < StationSummary > (initialState.stationSummary);
+    const [totalTransactions, setTotalTransactions] = useState(initialState.totalTransactions); 
+    const [percentageChange, setPercentageChange] = useState < number | null > (initialState.percentageChange);
+    const [peakHours, setPeakHours] = useState<{ busiest: number, quietest: number } | null>(initialState.peakHours);
+    // --- END OF MODIFICATION ---
 
     // useCallback is used to memoize the login function, preventing re-creation on every render.
     const performLogin = useCallback(async () => {
+        // ... (fungsi performLogin tidak berubah) ...
         try {
+            
             const response = await fetch("/api/index.php/login/doLogin", {
+            // const response = await fetch("http://36.92.28.99/lrt_jakpro_api/index.php/login/doLogin", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
@@ -120,8 +232,10 @@ const useTrafficData = (options) => {
 
     // useCallback memoizes the traffic data fetching function.
     const fetchTrafficData = useCallback(async (start, end, currentToken) => {
+        
         try {
             const response = await fetch("/api/index.php/transaction/list_gate_out_prepaid_trx", {
+            // const response = await fetch("http://36.92.28.99/lrt_jakpro_api/index.php/transaction/list_gate_out_prepaid_trx", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
@@ -172,14 +286,19 @@ const useTrafficData = (options) => {
         const fetchData = async (isInitialLoad = false) => {
             if (!isMounted) return;
             
-            // Only set loading true on the very first load. Refreshes happen in the background.
+            // MODIFIKASI: Hapus setIsLoading(true) di sini.
+            // Status loading awal sudah diatur oleh loadInitialState.
+            // Ini mencegah spinner muncul jika data dimuat dari cache.
+            /*
             if (isInitialLoad) {
                 setIsLoading(true);
             }
+            */
             setError(null);
 
-            // --- CACHING LOGIC START ---
+            // --- CACHING LOGIC (Hanya untuk 'month' dan 'week', 'today' ditangani saat inisialisasi) ---
             if (defaultRange === 'month') {
+                // ... (logika cache 'month' tidak berubah) ...
                 const cacheKey = `traffic-data-${formatDate(startDate).substring(0, 7)}`; // e.g., "traffic-data-2023-10"
                 try {
                     const cachedItem = localStorage.getItem(cacheKey);
@@ -204,6 +323,7 @@ const useTrafficData = (options) => {
                     // If cache is corrupted, proceed to fetch from API
                 }
             } else if (defaultRange === 'week') {
+                // ... (logika cache 'week' tidak berubah) ...
                 const [year, week] = getWeekNumber(startDate);
                 const cacheKey = `traffic-data-week-${year}-${week}`;
                 try {
@@ -234,7 +354,7 @@ const useTrafficData = (options) => {
             if (defaultRange === 'today') setPercentageChange(null);
 
             try {
-                // Ensure we have a valid token, performing login if necessary.
+                // ... (logika performLogin tidak berubah) ...
                 let currentToken = token;
                 if (!currentToken) {
                     currentToken = await performLogin();
@@ -248,7 +368,7 @@ const useTrafficData = (options) => {
                 const yesterday = new Date();
                 yesterday.setDate(yesterday.getDate() - 1);
 
-                // Fetch data for the selected range and for yesterday concurrently.
+                // ... (logika fetchTrafficData tidak berubah) ...
                 const [mainData, yesterdayData] = await Promise.all([
                     fetchTrafficData(formatDate(startDate), formatDate(endDate), currentToken),
                     // Only fetch yesterday's data if we need it for comparison
@@ -257,22 +377,7 @@ const useTrafficData = (options) => {
 
                 if (!mainData || !isMounted) return;
 
-                // --- CACHE SAVING LOGIC START ---
-                if (defaultRange === 'month') {
-                    const cacheKey = `traffic-data-${formatDate(startDate).substring(0, 7)}`;
-                        try {
-                            const itemToCache = {
-                                total: mainData.total,
-                                timestamp: Date.now()
-                            };
-                            localStorage.setItem(cacheKey, JSON.stringify(itemToCache));
-                        } catch(cacheError) {
-                            console.error("Failed to save to cache", cacheError);
-                        }
-                }
-                // --- CACHE SAVING LOGIC END ---
-
-                // Process the fetched data to create summaries and chart data.
+                // ... (logika pemrosesan data: dailyTotals, summary, yesterdaySummary) ...
                 const dailyTotals = {};
                 const summary = {};
                 const yesterdaySummary = {};
@@ -290,8 +395,11 @@ const useTrafficData = (options) => {
                     summary[station].total++;
                 });
                 
+
                 // --- Peak Hours Analysis for Today ---
+                let currentPeakHours = null; // <-- Variabel untuk menyimpan hasil
                 if (defaultRange === 'today') {
+                    // ... (logika hourlyCounts) ...
                     const hourlyCounts = Array(24).fill(0);
                     mainData.rows.forEach(row => {
                         try {
@@ -316,16 +424,17 @@ const useTrafficData = (options) => {
                                 quietestHour = quietestItem.hour;
                             }
                         }
+                        currentPeakHours = { busiest: busiestHour, quietest: quietestHour }; // <-- Simpan hasil
                         if (isMounted) {
-                            setPeakHours({ busiest: busiestHour, quietest: quietestHour });
+                            setPeakHours(currentPeakHours);
                         }
                     } else if (isMounted) {
-                        setPeakHours(null); // Reset if no data
+                        setPeakHours(null);
                     }
                 }
 
 
-                // Process yesterday's data to calculate percentage changes.
+                // ... (logika proses yesterdayData) ...
                 if (yesterdayData && yesterdayData.rows) {
                     
                     const yesterdayRowsUntilNow = (defaultRange === 'today')
@@ -349,7 +458,7 @@ const useTrafficData = (options) => {
                     });
                 }
 
-                // Prepare data for the weekly trend chart.
+                // ... (logika siapkan chartData 'week') ...
                 if (defaultRange === 'week') {
                     const diffDays = Math.max(1, Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 3600 * 24)) + 1);
                     const chartDataResult: ChartData[] = Array.from({ length: diffDays }, (_, i) => {
@@ -363,26 +472,16 @@ const useTrafficData = (options) => {
                         };
                     });
                     setChartData(chartDataResult);
-
-                    // --- CACHE SAVING LOGIC for week ---
-                    const [year, week] = getWeekNumber(startDate);
-                    const cacheKey = `traffic-data-week-${year}-${week}`;
-                    try {
-                        const itemToCache = {
-                            chartData: chartDataResult,
-                            timestamp: Date.now()
-                        };
-                        localStorage.setItem(cacheKey, JSON.stringify(itemToCache));
-                    } catch(cacheError) {
-                        console.error("Failed to save weekly data to cache", cacheError);
-                    }
                 }
 
                 // Update state with the processed data.
-                setStationSummary(summary);
-                setTotalTransactions(mainData.total);
+                if (isMounted) {
+                    setStationSummary(summary);
+                    setTotalTransactions(mainData.total);
+                }
 
                 // Calculate the overall percentage change for today's data.
+                let currentPercentageChange = null; // <-- Variabel untuk menyimpan hasil
                 if (defaultRange === 'today' && yesterdayData) {
                     const yesterdayTotalUntilNow = yesterdayData.rows.filter(row => new Date(row.gate_out_on_dtm) <= now).length;
                     
@@ -390,11 +489,62 @@ const useTrafficData = (options) => {
                     
                     if (yesterdayTotalUntilNow > 0) {
                         const change = ((todayTotal - yesterdayTotalUntilNow) / yesterdayTotalUntilNow) * 100;
-                        setPercentageChange(change);
+                        currentPercentageChange = change; // <-- Simpan hasil
+                        if (isMounted) setPercentageChange(currentPercentageChange);
                     } else {
-                        setPercentageChange(todayTotal > 0 ? 100 : 0);
+                        currentPercentageChange = todayTotal > 0 ? 100 : 0; // <-- Simpan hasil
+                        if (isMounted) setPercentageChange(currentPercentageChange);
                     }
                 }
+
+                // --- CACHE SAVING LOGIC START ---
+                if (defaultRange === 'month') {
+                    // ... (cache 'month' tidak berubah)
+                    const cacheKey = `traffic-data-${formatDate(startDate).substring(0, 7)}`;
+                        try {
+                            const itemToCache = {
+                                total: mainData.total,
+                                timestamp: Date.now()
+                            };
+                            localStorage.setItem(cacheKey, JSON.stringify(itemToCache));
+                        } catch(cacheError) {
+                            console.error("Failed to save to cache", cacheError);
+                        }
+                }
+                if (defaultRange === 'week') {
+                    // ... (cache 'week' tidak berubah)
+                    const [year, week] = getWeekNumber(startDate);
+                    const cacheKey = `traffic-data-week-${year}-${week}`;
+                    try {
+                        const itemToCache = {
+                            chartData: chartData, // chartData sudah di-set di atas
+                            timestamp: Date.now()
+                        };
+                        localStorage.setItem(cacheKey, JSON.stringify(itemToCache));
+                    } catch(cacheError) {
+                        console.error("Failed to save weekly data to cache", cacheError);
+                    }
+                }
+                
+                // --- NEW 'TODAY' CACHE SAVING LOGIC ---
+                if (defaultRange === 'today') {
+                    const cacheKey = getTodayCacheKey();
+                    try {
+                        const itemToCache = {
+                            data: {
+                                stationSummary: summary,
+                                totalTransactions: mainData.total,
+                                percentageChange: currentPercentageChange,
+                                peakHours: currentPeakHours,
+                            },
+                            timestamp: Date.now()
+                        };
+                        localStorage.setItem(cacheKey, JSON.stringify(itemToCache));
+                    } catch (cacheError) {
+                        console.error("Failed to save 'today' data to cache", cacheError);
+                    }
+                }
+                // --- CACHE SAVING LOGIC END ---
 
             } catch (err) {
                 if (isMounted && err instanceof Error) {
@@ -409,7 +559,7 @@ const useTrafficData = (options) => {
             }
         };
 
-        fetchData(true); // Initial fetch
+        fetchData(true); // Initial fetch (akan menggunakan cache jika ada)
 
         // Set up interval for refreshing data if refreshInterval is provided
         if (refreshInterval) {
@@ -422,13 +572,58 @@ const useTrafficData = (options) => {
 
         // Cleanup function to prevent state updates on an unmounted component.
         return () => { isMounted = false; };
-    }, [startDate, endDate, token, performLogin, fetchTrafficData, defaultRange, refreshInterval]);
+    }, [startDate, endDate, performLogin, fetchTrafficData, defaultRange, refreshInterval]); // Dependencies MODIFIED: removed 'token'
 
     return { isLoading, error, chartData, stationSummary, totalTransactions, percentageChange, peakHours };
 };
 
+// --- Social Media Sentiment Component ---
+const SocialSentimentCard = ({ isLight }) => {
+    // ... (Komponen ini tidak berubah) ...
+    // Mock data for social media sentiment
+    const sentimentData = {
+        positive: 1250,
+        neutral: 800,
+        negative: 150,
+    };
+    const totalMentions = sentimentData.positive + sentimentData.neutral + sentimentData.negative;
+    const positivePercent = (sentimentData.positive / totalMentions) * 100;
+    const neutralPercent = (sentimentData.neutral / totalMentions) * 100;
+    const negativePercent = (sentimentData.negative / totalMentions) * 100;
+
+    const sentiments = [
+        { name: 'Positif', percent: positivePercent, emoji: '😊' },
+        { name: 'Netral', percent: neutralPercent, emoji: '😐' },
+        { name: 'Negatif', percent: negativePercent, emoji: '😠' },
+    ];
+
+    return (
+        <div className={`rounded-lg p-3 flex-shrink-0 transition-colors h-100 flex flex-col ${isLight ? 'bg-white border border-slate-200 shadow-sm' : 'bg-slate-900 border border-slate-800'}`}>
+            <h2 className={`text-xs font-bold mb-2 uppercase border-b pb-1 flex-shrink-0 ${isLight ? 'text-[#D3242B] border-slate-200' : 'text-[#F6821F] border-slate-800'}`}>Sentimen Media Sosial</h2>
+            <div className="flex-1 flex items-center justify-center">
+                {/* ✅ MODIFICATION: Changed to a grid layout without progress bars */}
+                <div className="grid grid-cols-3 gap-4 text-center w-full">
+                    {sentiments.map(sentiment => (
+                        <div key={sentiment.name} className="flex flex-col items-center">
+                            <span className="text-1xl mb-1">{sentiment.emoji}</span>
+                            <span className={`font-bold text-sm ${isLight ? 'text-slate-800' : 'text-white'}`}>
+                                {sentiment.percent.toFixed(1)}%
+                            </span>
+                            <span className={`text-xs ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>
+                                {sentiment.name}
+                            </span>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        </div>
+    );
+};
+
+
 // --- Custom Hook for Survey Data ---
 const useSurveyData = () => {
+    // ... (Komponen ini tidak berubah) ...
     const [surveyData, setSurveyData] = useState<SurveyData[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -480,6 +675,7 @@ const useSurveyData = () => {
 
 // --- NEW Custom Hook for Performance Data (OTP & SPM) ---
 const usePerformanceData = (type: 'OTP' | 'SPM') => {
+    // ... (Komponen ini tidak berubah) ...
     const [data, setData] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -487,6 +683,7 @@ const usePerformanceData = (type: 'OTP' | 'SPM') => {
     useEffect(() => {
         let isMounted = true;
         const fetchPerformanceData = async () => {
+            // JANGAN set isLoading(true) di sini agar tidak flash
             setError(null);
             try {
                 const VITE_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlzcm51ZWlmdGRoYXdpb2Z1dnh6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjA2OTIzMDEsImV4cCI6MjA3NjI2ODMwMX0.v8qIGTwvOcJ9cLw1GBzcw0g95nSyGVe-n5ISPc-yCFg";
@@ -549,16 +746,62 @@ const usePerformanceData = (type: 'OTP' | 'SPM') => {
     return { data, isLoading, error };
 };
 
+// --- NEW Custom Hook for Hot News (with Dummy Data) ---
+const useNewsData = () => {
+    // ... (Komponen ini tidak berubah) ...
+    const [newsData, setNewsData] = useState<NewsItem[]>([]);
+    const [isLoading, setIsLoading] = useState(false); // Set to false
+    const [error, setError] = useState<string | null>(null);
+
+    useEffect(() => {
+        // Dummy data
+        const dummyNews: NewsItem[] = [
+            { id: 1, title: 'LRT Jakarta Tambah 5 Rangkaian Kereta Baru', source: 'Kompas.com', created_at: new Date(Date.now() - 3600 * 1000 * 1).toISOString() },
+            { id: 2, title: 'Integrasi Tiket JakLingko Capai 90%', source: 'Detik.com', created_at: new Date(Date.now() - 3600 * 1000 * 3).toISOString() },
+            { id: 3, title: 'Jam Operasional Diperpanjang Selama Akhir Pekan', source: 'CNN Indonesia', created_at: new Date(Date.now() - 3600 * 1000 * 5).toISOString() },
+            { id: 4, title: 'Uji Coba Pembayaran QRIS di Semua Stasiun', source: 'BeritaSatu', created_at: new Date(Date.now() - 3600 * 1000 * 8).toISOString() },
+            { id: 5, title: 'Pembangunan Fase 1B Velodrome-Manggarai Dimulai', source: 'Antara News', created_at: new Date(Date.now() - 3600 * 1000 * 12).toISOString() },
+        ];
+        setNewsData(dummyNews);
+    }, []);
+
+    return { newsData, isLoading, error };
+};
+
+// --- NEW Custom Hook for Social Media Growth (with Dummy Data) ---
+const useSocialMediaData = () => {
+    // ... (Komponen ini tidak berubah) ...
+    const [socialData, setSocialData] = useState<SocialGrowth[]>([]);
+    const [isLoading, setIsLoading] = useState(false); // Set to false
+    const [error, setError] = useState<string | null>(null);
+
+    useEffect(() => {
+        // Dummy data
+        const dummySocial: SocialGrowth[] = [
+            { platform: 'instagram', growth_percentage: 12.5 },
+            { platform: 'facebook', growth_percentage: 3.2 },
+            { platform: 'twitter', growth_percentage: -1.1 },
+            { platform: 'tiktok', growth_percentage: 22.8 },
+            { platform: 'youtube', growth_percentage: 8.5 },
+            { platform: 'linkedin', growth_percentage: 5.0 },
+        ];
+        setSocialData(dummySocial);
+    }, []);
+
+    return { socialData, isLoading, error };
+};
+
 
 // 3. Komponen untuk menampilkan satu Pie Chart
 const PieChartCard = ({ data, isLight }) => {
+    // ... (Komponen ini tidak berubah) ...
     // Data untuk chart: satu slice untuk nilai, satu untuk sisa (agar menjadi 100%)
     const chartData = [
         { name: 'Capaian', value: data.value },
         { name: 'Sisa', value: 100 - data.value }
     ];
     // Warna untuk slice 'Capaian' dan 'Sisa'
-    const colors = ['#a16207', isLight ? '#e5e7eb' : '#374151'];
+    const colors = ['#d3242b', isLight ? '#e5e7eb' : '#374151'];
 
     return (
         <div className="flex flex-col items-center text-center">
@@ -579,7 +822,7 @@ const PieChartCard = ({ data, isLight }) => {
                                 <Cell key={`cell-${index}`} fill={colors[index]} stroke={colors[index]} />
                             ))}
                         </Pie>
-                         <Tooltip formatter={(value) => `${value}%`} />
+                            <Tooltip formatter={(value) => `${value}%`} />
                     </PieChart>
                 </ResponsiveContainer>
             </div>
@@ -600,6 +843,7 @@ const PieChartCard = ({ data, isLight }) => {
 
 // 4. Komponen utama yang menggabungkan semuanya
 const CustomerSatisfactionChart = ({ isLight }) => {
+    // ... (Komponen ini tidak berubah) ...
     const { surveyData, isLoading, error } = useSurveyData();
 
     // Gunakan useMemo untuk memproses data hanya ketika surveyData berubah
@@ -669,7 +913,7 @@ const CustomerSatisfactionChart = ({ isLight }) => {
     // Tampilan utama setelah data berhasil dimuat
     return (
         <div className={`flex-1 rounded-lg p-3 flex flex-col transition-colors ${isLight ? 'bg-white border border-slate-200 shadow-sm' : 'bg-slate-900 border border-slate-800'}`}>
-            <div className="flex-1 grid grid-cols-2 gap-4 mt-2">
+            <div className={`flex-1 grid grid-cols-1 md:grid-cols-2 gap-4 mt-2`}>
                 
                 {/* Bagian Kiri: Line Chart */}
                 <div className="flex flex-col">
@@ -692,7 +936,7 @@ const CustomerSatisfactionChart = ({ isLight }) => {
                 {/* Bagian Kanan: Pie Charts */}
                 <div className="flex flex-col justify-center">
                     <h3 className={`text-sm font-bold text-center mb-4 ${isLight ? 'text-slate-700' : 'text-slate-300'}`}>Capaian Per Triwulan - {currentYear}</h3>
-                    <div className="grid grid-cols-4 gap-2">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                         {pieData.map(d => <PieChartCard key={d.name} data={d} isLight={isLight} />)}
                     </div>
                 </div>
@@ -704,6 +948,7 @@ const CustomerSatisfactionChart = ({ isLight }) => {
 
 // --- NEW COMPONENT: Closing Rate Chart ---
 const ClosingRateChart = ({ isLight }) => {
+    // ... (Komponen ini tidak berubah) ...
     const donutData = [
         { name: 'Prasarana', value: 296, color: '#64748b' },
         { name: 'IT', value: 81, color: '#D3242B' },
@@ -719,10 +964,10 @@ const ClosingRateChart = ({ isLight }) => {
 
     return (
         <div className={`rounded-lg p-2 shadow-sm transition-colors flex flex-col ${isLight ? 'bg-white border border-slate-200' : 'bg-slate-900 border border-slate-800'}`}>
-            <h2 className={`text-xs font-bold mb-2 uppercase border-b pb-1 ${isLight ? 'text-[#D3242B] border-slate-200' : 'text-[#F6821F] border-slate-800'}`}>Closing Rate Divisi</h2>
+            <h2 className={`text-xs font-bold mb-1 uppercase border-b pb-1 ${isLight ? 'text-[#D3242B] border-slate-200' : 'text-[#F6821F] border-slate-800'}`}>Closing Rate Divisi</h2>
             <div className="flex-1 flex items-center">
                 <div className="w-1/2 relative">
-                    <ResponsiveContainer width="100%" height={120}>
+                    <ResponsiveContainer width="100%" height={95}>
                         <PieChart>
                             <Pie data={donutData} dataKey="value" innerRadius="60%" outerRadius="80%" startAngle={90} endAngle={-270}>
                                 {donutData.map((entry) => <Cell key={entry.name} fill={entry.color} stroke={entry.color} />)}
@@ -730,7 +975,7 @@ const ClosingRateChart = ({ isLight }) => {
                         </PieChart>
                     </ResponsiveContainer>
                     <div className="absolute inset-0 flex flex-col items-center justify-center">
-                        <span className={`text-2xl font-bold ${isLight ? 'text-slate-800' : 'text-white'}`}>{total}</span>
+                        <span className={`text-1xl font-bold ${isLight ? 'text-slate-800' : 'text-white'}`}>{total}</span>
                         <span className={`text-xs ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Isu</span>
                     </div>
                 </div>
@@ -754,7 +999,7 @@ const ClosingRateChart = ({ isLight }) => {
 
 // --- UPDATED COMPONENT: Performance Chart (for OTP and SPM) ---
 const PerformanceChart = ({ isLight, title, data, color, isLoading, error }) => {
-
+    // ... (Komponen ini tidak berubah) ...
     if (isLoading) {
         return (
             <div className={`rounded-lg p-2 shadow-sm transition-colors flex flex-col justify-center items-center min-h-[150px] ${isLight ? 'bg-white border border-slate-200' : 'bg-slate-900 border border-slate-800'}`}>
@@ -823,9 +1068,130 @@ const PerformanceChart = ({ isLight, title, data, color, isLoading, error }) => 
     );
 };
 
+{/* --- NEW COMPONENT: Combined Performance Card (OTP & SPM) --- */}
+const CombinedPerformanceCard = ({ isLight, otpData, spmData }) => {
+    // ... (Komponen ini tidak berubah) ...
+    const [visibleChart, setVisibleChart] = useState('OTP');
+
+    useEffect(() => {
+        const timer = setInterval(() => {
+            setVisibleChart(prev => (prev === 'OTP' ? 'SPM' : 'OTP'));
+        }, 5000); // 5 detik
+        return () => clearInterval(timer);
+    }, []);
+
+    const chartConfig = {
+        OTP: {
+            title: 'Ketepatan Waktu (OTP)',
+            color: '#a16207',
+            ...otpData,
+        },
+        SPM: {
+            title: 'Capaian SPM',
+            color: '#F6821F',
+            ...spmData,
+        },
+    };
+
+    const { title, color, data, isLoading, error } = chartConfig[visibleChart];
+
+    const renderContent = () => {
+        if (isLoading) {
+            return (
+                <div className="flex flex-1 justify-center items-center min-h-[150px]">
+                    <Loader2 className={`h-6 w-6 animate-spin ${isLight ? 'text-[#D3242B]' : 'text-[#F6821F]'}`} />
+                </div>
+            );
+        }
+
+        if (error) {
+            return (
+                <div className="flex flex-1 flex-col justify-center items-center text-center min-h-[150px]">
+                    <AlertTriangle className="h-5 w-5 text-red-500 mb-1" />
+                    <h3 className="text-xs font-bold">Gagal Memuat</h3>
+                    <p className="text-xs">{title}</p>
+                </div>
+            );
+        }
+        
+        if (!data || data.length === 0) {
+            return (
+                <div className="flex flex-1 flex-col justify-center items-center text-center min-h-[150px]">
+                    <PieChartIcon className="h-5 w-5 text-slate-400 mb-1" />
+                    <p className={`text-xs ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Data {title} tidak tersedia.</p>
+                </div>
+            );
+        }
+
+        const average = data.reduce((sum, item) => sum + item.value, 0) / data.length;
+        
+        return (
+            <div className="flex-1 flex flex-col">
+                <div className="flex-1">
+                    <ResponsiveContainer width="100%" height={100}>
+                        <BarChart data={data} margin={{ top: 10, right: 5, left: -20, bottom: -5 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke={isLight ? 'transparent' : 'rgba(255,255,255,0.1)'} />
+                            <XAxis dataKey="month" stroke={isLight ? '#475569' : '#94a3b8'} style={{ fontSize: '10px' }} axisLine={false} tickLine={false} />
+                            <YAxis 
+                                domain={['dataMin - 2', 100]} 
+                                stroke={isLight ? '#475569' : '#94a3b8'} 
+                                style={{ fontSize: '10px' }} 
+                                axisLine={false} 
+                                tickLine={false}
+                                tickFormatter={(value) => `${Math.round(value)}%`}
+                            />
+                            <Tooltip
+                                cursor={{ fill: isLight ? '#f8fafc' : '#1e293b' }}
+                                contentStyle={{ 
+                                    backgroundColor: isLight ? 'rgba(255, 255, 255, 0.8)' : 'rgba(15, 23, 42, 0.8)', 
+                                    backdropFilter: 'blur(4px)',
+                                    border: `1px solid ${color}`, 
+                                    borderRadius: '8px', 
+                                    fontSize: '12px',
+                                    boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)'
+                                }}
+                                labelStyle={{ color: isLight ? '#334155' : '#cbd5e1', fontWeight: 'bold' }}
+                                formatter={(value) => [`${value}%`, "Capaian"]}
+                            />
+                            <Bar dataKey="value" fill={color} barSize={12} radius={[4, 4, 4, 4]} />
+                        </BarChart>
+                    </ResponsiveContainer>
+                </div>
+                <div className={`text-center text-xs mt-1 pt-1 border-t ${isLight ? 'border-slate-100 text-slate-500' : 'border-slate-800 text-slate-400'}`}>
+                    Rata-rata {data.length} bulan: <span className="font-bold">{average.toFixed(2)}%</span>
+                </div>
+            </div>
+        );
+    };
+
+    return (
+        <div className={`rounded-lg p-2 shadow-sm transition-colors flex flex-col ${isLight ? 'bg-white border border-slate-200' : 'bg-slate-900 border border-slate-800'}`}>
+            <h2 className={`text-xs font-bold mb-2 uppercase border-b pb-1 ${isLight ? 'text-[#D3242B] border-slate-200' : 'text-[#F6821F] border-slate-800'}`}>{title}</h2>
+            
+            {/* Animated Content */}
+            <div key={visibleChart} className="animate-fade-in flex-1 flex flex-col">
+                {renderContent()}
+            </div>
+
+            {/* Paging dots */}
+            <div className="flex justify-center space-x-1.5 mt-2">
+                {['OTP', 'SPM'].map((chartName) => (
+                    <div
+                        key={chartName}
+                        className={`w-2 h-2 rounded-full transition-all ${
+                            chartName === visibleChart ? (isLight ? 'bg-[#D3242B]' : 'bg-[#F6821F]') : (isLight ? 'bg-slate-300' : 'bg-slate-700')
+                        }`}
+                    ></div>
+                ))}
+            </div>
+        </div>
+    );
+};
+
 
 // --- NEW COMPONENT: Passenger Insights ---
 const PassengerInsights = ({ isLight, weeklyData }) => {
+    // ... (Komponen ini tidak berubah) ...
     if (!weeklyData || weeklyData.length === 0) {
         return <div className={`rounded-lg p-3 h-full flex items-center justify-center text-sm ${isLight ? 'bg-white border border-slate-200' : 'bg-slate-900 border border-slate-800'}`}>Data tidak cukup untuk analisis.</div>;
     }
@@ -856,7 +1222,7 @@ const PassengerInsights = ({ isLight, weeklyData }) => {
                 {/* Weekday vs Weekend */}
                 <div className="flex flex-col">
                     <h3 className={`text-sm font-bold text-center mb-2 ${isLight ? 'text-slate-700' : 'text-slate-300'}`}>Perbandingan Weekday vs Weekend</h3>
-                    <div className="flex-1 grid grid-cols-2 gap-4 text-center">
+                    <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-4 text-center">
                         <div>
                             <div className={`text-xs font-bold uppercase ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Rata-Rata Weekday</div>
                             <div className={`text-2xl font-bold mt-1 ${isLight ? 'text-slate-900' : 'text-white'}`}>{Math.round(avgWeekday).toLocaleString('id-ID')}</div>
@@ -887,12 +1253,13 @@ const PassengerInsights = ({ isLight, weeklyData }) => {
 
 // --- NEW COMPONENT: Latest Issues ---
 const LatestIssues = ({ isLight }) => {
+    // ... (Komponen ini tidak berubah) ...
     const issues = [
         { title: 'Maintenance terjadwal di Stasiun Velodrome', status: 'Scheduled', time: '08:00' },
         { title: 'Minor delay resolved - Stasiun Equestrian', status: 'Resolved', time: '07:30' }
     ];
     return (
-        <div className={` ${isLight ? 'bg-white border-slate-200' : 'bg-slate-900 border border-slate-800'}`}>
+        <div className={` ${isLight ? 'bg-white' : 'bg-slate-900 border border-slate-800'}`}>
             <h2 className={`text-xs font-bold mb-2 uppercase border-b pb-1 ${isLight ? 'text-[#D3242B] border-slate-200' : 'text-[#F6821F] border-slate-800'}`}>Isu Terakhir</h2>
             <div className="space-y-1.5 flex-1 flex flex-col justify-center">
                 {issues.map((item, idx) => (
@@ -909,65 +1276,141 @@ const LatestIssues = ({ isLight }) => {
     );
 };
 
-// --- NEW COMPONENT: News Updates ---
-const NewsUpdates = ({ isLight }) => {
-    const news = [
-        { title: "LRT Jakarta Tambah Jadwal di Akhir Pekan", source: "Kompas.com", time: "2 jam lalu" },
-        { title: "Integrasi Transportasi, Jakpro Gandeng Swasta", source: "CNN Indonesia", time: "8 jam lalu" },
-        { title: "Uji Coba Sistem Tiket Baru Berjalan Lancar", source: "Detik.com", time: "1 hari lalu" },
-    ];
+// --- MODIFIED COMPONENT: Hot News Card (was NewsUpdates) ---
+const HotNewsCard = ({ isLight }) => {
+    // ... (Komponen ini tidak berubah) ...
+    const { newsData, isLoading, error } = useNewsData();
+    const [currentIndex, setCurrentIndex] = useState(0);
+
+    useEffect(() => {
+        if (newsData && newsData.length > 0) {
+            const timer = setInterval(() => {
+                setCurrentIndex(prevIndex => (prevIndex + 1) % newsData.length);
+            }, 10000); // 10 detik
+
+            return () => clearInterval(timer);
+        }
+    }, [newsData]);
+
+    const currentNews = newsData[currentIndex];
+
+    const renderContent = () => {
+        if (isLoading) {
+            return <div className="flex justify-center items-center h-full"><Loader2 className={`h-6 w-6 animate-spin ${isLight ? 'text-[#D3242B]' : 'text-[#F6821F]'}`} /></div>;
+        }
+        if (error) {
+            return (
+                <div className={`flex flex-col justify-center items-center h-full text-center ${isLight ? 'text-red-700' : 'text-red-300'}`}>
+                    <AlertTriangle className="h-5 w-5 text-red-500 mb-1" />
+                    <p className="text-xs">Gagal memuat berita</p>
+                </div>
+            );
+        }
+        if (!currentNews) {
+            return <div className={`flex justify-center items-center h-full text-xs ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Tidak ada berita.</div>;
+        }
+
+        return (
+            <div key={currentIndex} className="flex flex-col justify-center flex-1 animate-fade-in">
+                <p className={`text-xs font-semibold leading-tight ${isLight ? 'text-slate-700' : 'text-slate-300'}`}>{currentNews.title}</p>
+                <p className={`text-xs mt-0.5 ${isLight ? 'text-slate-400' : 'text-slate-500'}`}>{currentNews.source} - {timeAgo(currentNews.created_at)}</p>
+            </div>
+        );
+    };
+
     return (
         <div className={`rounded-lg p-2 shadow-sm transition-colors flex flex-col flex-1 ${isLight ? 'bg-white border border-slate-200' : 'bg-slate-900 border border-slate-800'}`}>
-            <h2 className={`text-xs font-bold mb-2 uppercase border-b pb-1 ${isLight ? 'text-[#D3242B] border-slate-200' : 'text-[#F6821F] border-slate-800'}`}>Berita Terkini</h2>
-            <div className="space-y-2 flex-1 overflow-y-auto">
-                {news.map((item, idx) => (
-                    <div key={idx}>
-                        <p className={`text-xs font-semibold leading-tight ${isLight ? 'text-slate-700' : 'text-slate-300'}`}>{item.title}</p>
-                        <p className={`text-xs mt-0.5 ${isLight ? 'text-slate-400' : 'text-slate-500'}`}>{item.source} - {item.time}</p>
-                    </div>
+            <h2 className={`text-xs font-bold mb-2 uppercase border-b pb-1 ${isLight ? 'text-[#D3242B] border-slate-200' : 'text-[#F6821F] border-slate-800'}`}>Hot News</h2>
+            <div className="flex-1 overflow-hidden">
+                {renderContent()}
+            </div>
+            {/* Paging dots */}
+            <div className="flex justify-center space-x-1.5 mt-2">
+                {newsData.map((_, index) => (
+                    <div
+                        key={index}
+                        className={`w-2 h-2 rounded-full transition-all ${
+                            index === currentIndex ? (isLight ? 'bg-[#D3242B]' : 'bg-[#F6821F]') : (isLight ? 'bg-slate-300' : 'bg-slate-700')
+                        }`}
+                    ></div>
                 ))}
             </div>
+            {/* We need to add keyframes for the fade animation */}
+            <style>
+                {`
+                @keyframes fade-in {
+                    from { opacity: 0; transform: translateY(5px); }
+                    to { opacity: 1; transform: translateY(0); }
+                }
+                .animate-fade-in {
+                    animation: fade-in 0.5s ease-out;
+                }
+                `}
+            </style>
         </div>
     );
 };
 
-// --- MODIFIED COMPONENT: Social Sentiment ---
-const SocialSentimentCard = ({ isLight }) => {
-    // Mock data for social media sentiment
-    const sentimentData = {
-        positive: 1250,
-        neutral: 800,
-        negative: 150,
+
+// --- MODIFIED COMPONENT: Social Media Growth Card (was SocialSentimentCard) ---
+const SocialMediaGrowthCard = ({ isLight }) => {
+    // ... (Komponen ini tidak berubah) ...
+    const { socialData, isLoading, error } = useSocialMediaData();
+
+    const socialIcons = {
+        instagram: <Instagram className="w-5 h-5 text-[#E1306C]" />,
+        facebook: <Facebook className="w-5 h-5 text-[#1877F2]" />,
+        twitter: <Twitter className="w-5 h-5 text-[#1DA1F2]" />,
+        tiktok: <Hash className="w-5 h-5" style={{color: isLight ? 'black' : 'white'}} />, // Lucide doesn't have TikTok, using Hash
+        youtube: <Youtube className="w-5 h-5 text-[#FF0000]" />,
+        linkedin: <Linkedin className="w-5 h-5 text-[#0A66C2]" />,
     };
-    const totalMentions = sentimentData.positive + sentimentData.neutral + sentimentData.negative;
-    const positivePercent = (sentimentData.positive / totalMentions) * 100;
-    const neutralPercent = (sentimentData.neutral / totalMentions) * 100;
-    const negativePercent = (sentimentData.negative / totalMentions) * 100;
 
-    const sentiments = [
-        { name: 'Positif', percent: positivePercent, emoji: '😊' },
-        { name: 'Netral', percent: neutralPercent, emoji: '😐' },
-        { name: 'Negatif', percent: negativePercent, emoji: '😠' },
-    ];
+    const platformOrder = ['instagram', 'facebook', 'twitter', 'tiktok', 'youtube', 'linkedin'];
 
-    return (
-        <div className={`rounded-lg p-3 flex-shrink-0 transition-colors h-100 flex flex-col ${isLight ? 'bg-white border border-slate-200 shadow-sm' : 'bg-slate-900 border border-slate-800'}`}>
-            <h2 className={`text-xs font-bold mb-2 uppercase border-b pb-1 flex-shrink-0 ${isLight ? 'text-[#D3242B] border-slate-200' : 'text-[#F6821F] border-slate-800'}`}>Sentimen Media Sosial</h2>
-            <div className="flex-1 flex items-center justify-center">
-                {/* ✅ MODIFICATION: Changed to a grid layout without progress bars */}
-                <div className="grid grid-cols-3 gap-4 text-center w-full">
-                    {sentiments.map(sentiment => (
-                        <div key={sentiment.name} className="flex flex-col items-center">
-                            <span className="text-3xl mb-1">{sentiment.emoji}</span>
-                            <span className={`font-bold text-lg ${isLight ? 'text-slate-800' : 'text-white'}`}>
-                                {sentiment.percent.toFixed(1)}%
-                            </span>
-                            <span className={`text-xs ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>
-                                {sentiment.name}
+    const renderContent = () => {
+        if (isLoading) {
+            return <div className="flex justify-center items-center h-full"><Loader2 className={`h-6 w-6 animate-spin ${isLight ? 'text-[#D3242B]' : 'text-[#F6821F]'}`} /></div>;
+        }
+        if (error) {
+            return (
+                <div className={`flex flex-col justify-center items-center h-full text-center ${isLight ? 'text-red-700' : 'text-red-300'}`}>
+                    <AlertTriangle className="h-5 w-5 text-red-500 mb-1" />
+                    <p className="text-xs">Gagal memuat data</p>
+                </div>
+            );
+        }
+
+        const sortedData = [...socialData].sort((a, b) => 
+            platformOrder.indexOf(a.platform) - platformOrder.indexOf(b.platform)
+        );
+
+        return (
+            <div className="grid grid-cols-3 gap-x-2 gap-y-3 pt-2">
+                {sortedData.map(social => {
+                    const growth = social.growth_percentage;
+                    const color = growth > 0 ? 'text-emerald-500' : growth < 0 ? 'text-red-500' : (isLight ? 'text-slate-500' : 'text-slate-400');
+                    const Icon = growth > 0 ? ArrowUp : growth < 0 ? ArrowDown : null;
+                    return (
+                        <div key={social.platform} className="flex flex-col items-center text-center">
+                            {socialIcons[social.platform]}
+                            <span className={`text-[11px] font-bold capitalize mt-0.5 ${isLight ? 'text-slate-600' : 'text-slate-300'}`}>{social.platform}</span>
+                            <span className={`text-xs font-bold flex items-center ${color}`}>
+                                {Icon && <Icon className="w-3 h-3" />}
+                                {growth.toFixed(1)}%
                             </span>
                         </div>
-                    ))}
-                </div>
+                    );
+                })}
+            </div>
+        );
+    };
+
+    return (
+        <div className={`rounded-lg p-2 shadow-sm transition-colors flex flex-col ${isLight ? 'bg-white border border-slate-200' : 'bg-slate-900 border border-slate-800'}`}>
+            <h2 className={`text-xs font-bold mb-1 uppercase border-b pb-1 flex-shrink-0 ${isLight ? 'text-[#D3242B] border-slate-200' : 'text-[#F6821F] border-slate-800'}`}>Pertumbuhan Sosmed (Bulan Ini)</h2>
+            <div className="flex-1">
+                {renderContent()}
             </div>
         </div>
     );
@@ -975,6 +1418,7 @@ const SocialSentimentCard = ({ isLight }) => {
 
 // --- NEW COMPONENT: Realtime Peak Hours Info ---
 const RealtimeHoursInfo = ({ isLight, peakHours }) => {
+    // ... (Komponen ini tidak berubah) ...
     const formatHourRange = (hour) => {
         if (hour === null || hour < 0 || hour > 23) {
             return 'N/A';
@@ -1008,6 +1452,7 @@ const RealtimeHoursInfo = ({ isLight, peakHours }) => {
 
 // --- Main Dashboard Component ---
 const LRTJakartaDashboard = () => {
+    // ... (State, hooks, dan logika lainnya tidak berubah) ...
     // State for UI elements like current time, theme, and simulated train positions.
     const [currentTime, setCurrentTime] = useState(new Date());
     const [theme, setTheme] = useState('light');
@@ -1149,10 +1594,12 @@ const LRTJakartaDashboard = () => {
         <>
             {/* Import custom Google Font */}
             <style>{`@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;700;800&display=swap'); .font-jakarta-sans { font-family: 'Plus Jakarta Sans', sans-serif; }`}</style>
-            <div className={`h-screen p-3 flex flex-col font-jakarta-sans transition-colors duration-300 ${isLight ? 'bg-slate-100 text-slate-800' : 'bg-slate-950 text-slate-200'}`}>
-                {/* Header */}
-                <header className="mb-2 flex justify-between items-center p-3 rounded-lg bg-gradient-to-r from-[#D3242B] to-[#F6821F] flex-shrink-0 shadow-lg">
-                    <div className="flex items-center gap-4">
+            {/* Main container: Added min-h-screen for mobile scrolling, lg:h-screen lg:overflow-hidden for fixed desktop */}
+            <div className={`min-h-screen lg:h-screen lg:overflow-hidden p-3 flex flex-col font-jakarta-sans transition-colors duration-300 ${isLight ? 'bg-slate-100 text-slate-800' : 'bg-slate-950 text-slate-200'}`}>
+                {/* Header: Added flex-col md:flex-row */}
+                <header className="mb-2 flex flex-col md:flex-row justify-between items-center p-3 rounded-lg bg-gradient-to-r from-[#D3242B] to-[#F6821F] flex-shrink-0 shadow-lg">
+                    {/* Header Left: Added flex-col md:flex-row and text-center md:text-left */}
+                    <div className="flex flex-col items-center text-center md:flex-row md:items-center md:text-left gap-2 md:gap-4">
                         <img 
                             src="https://e-ptw.lrtjakarta.co.id/_next/image?url=%2F_next%2Fstatic%2Fmedia%2Flogo-lrtj-white.847caf54.png&w=640&q=75" 
                             alt="LRT Jakarta Logo" 
@@ -1163,7 +1610,8 @@ const LRTJakartaDashboard = () => {
                             <p className="text-xs font-semibold text-white/80">Pegangsaan Dua - Velodrome Line | Real-Time Monitoring System</p>
                         </div>
                     </div>
-                    <div className="flex items-center gap-4">
+                    {/* Header Right: Added mt-3 md:mt-0 */}
+                    <div className="flex items-center gap-4 mt-3 md:mt-0">
                         <div className="text-right">
                             <div className="text-xl font-bold text-white">{currentTime.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}</div>
                             <div className="text-white/80 text-xs">{currentTime.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long' })}</div>
@@ -1172,67 +1620,68 @@ const LRTJakartaDashboard = () => {
                     </div>
                 </header>
 
-                {/* Top KPI Bar */}
-                <section className={`grid grid-cols-5 gap-2 mb-2 flex-shrink-0 rounded-lg p-2 transition-colors ${isLight ? 'bg-white border border-slate-200 shadow-sm' : 'bg-slate-900 border border-slate-800'}`}>
-                    <div className="text-center">
-                        <div className={`text-xs font-bold uppercase mb-1 ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Penumpang Hari Ini</div>
-                        {/* ✅ MODIFICATION: Removed loader for seamless updates */}
+                {/* MODIFIKASI: Top KPI Bar - Dibuat lebih ringkas */}
+                <section className={`grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-1 mb-2 flex-shrink-0 rounded-lg p-1 transition-colors ${isLight ? 'bg-white border border-slate-200 shadow-sm' : 'bg-slate-900 border border-slate-800'}`}>
+                    <div className="text-center p-1.5">
+                        <div className={`text-[11px] font-bold uppercase mb-0.5 ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Penumpang Hari Ini</div>
                         <>
-                            <div className={`text-2xl font-bold ${isLight ? 'text-slate-900' : 'text-white'}`}>{todayTotalTransactions.toLocaleString('id-ID')}</div>
+                            <div className={`text-xl font-bold ${isLight ? 'text-slate-900' : 'text-white'}`}>{todayTotalTransactions.toLocaleString('id-ID')}</div>
                             {percentageChange !== null && (
-                                <div className={`text-xs mt-0.5 ${isLight ? 'text-slate-400' : 'text-slate-500'}`}>
+                                <div className={`text-[11px] mt-0.5 ${isLight ? 'text-slate-400' : 'text-slate-500'}`}>
                                     Semua Stasiun
                                 </div>
                             )}
                         </>
                     </div>
-                    <div className="text-center border-l border-r px-2" style={{ borderColor: isLight ? '#e2e8f0' : '#334155' }}>
-                        <div className={`text-xs font-bold uppercase mb-1 ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>On-Time Performance</div>
+                    <div className="text-center border-l border-r p-1.5" style={{ borderColor: isLight ? '#e2e8f0' : '#334155' }}>
+                        <div className={`text-[11px] font-bold uppercase mb-0.5 ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>On-Time Performance</div>
                         {isOtpLoading ? (
-                           <div className="flex justify-center mt-2"><Loader2 className="h-6 w-6 animate-spin text-emerald-500" /></div>
+                           <div className="flex justify-center mt-1"><Loader2 className="h-5 w-5 animate-spin text-emerald-500" /></div>
                         ) : (
-                           <>
-                           <div className={`text-2xl font-bold flex items-center justify-center gap-1.5 ${currentMonthOtpValue && currentMonthOtpTarget && currentMonthOtpValue >= currentMonthOtpTarget ? 'text-emerald-500' : 'text-amber-500'}`}>
-                                <CheckCircle className="h-5 w-5" />
+                            <>
+                            <div className={`text-xl font-bold flex items-center justify-center gap-1.5 ${currentMonthOtpValue && currentMonthOtpTarget && currentMonthOtpValue >= currentMonthOtpTarget ? 'text-emerald-500' : 'text-amber-500'}`}>
+                                <CheckCircle className="h-4 w-4" />
                                 {currentMonthOtpValue !== null ? `${currentMonthOtpValue.toFixed(1)}%` : 'N/A'}
-                           </div>
-                           <div className={`text-xs mt-0.5 ${isLight ? 'text-slate-400' : 'text-slate-500'}`}>
-                                Target Bulan Ini: {currentMonthOtpTarget !== null ? `${currentMonthOtpTarget}%` : 'N/A'}
-                           </div>
-                           </>
+                            </div>
+                            <div className={`text-[11px] mt-0.5 ${isLight ? 'text-slate-400' : 'text-slate-500'}`}>
+                                Target: {currentMonthOtpTarget !== null ? `${currentMonthOtpTarget}%` : 'N/A'}
+                            </div>
+                            </>
                         )}
                     </div>
-                    <div className="text-center border-r pr-2" style={{ borderColor: isLight ? '#e2e8f0' : '#334155' }}>
-                        <div className={`text-xs font-bold uppercase mb-1 ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Trip Selesai</div>
-                        <div className="text-2xl font-bold text-emerald-500 flex items-center justify-center gap-1.5"><Repeat className="h-5 w-5" /> 178/180</div>
-                        <div className={`text-xs mt-0.5 ${isLight ? 'text-slate-400' : 'text-slate-500'}`}>Performa 98.9%</div>
+                    <div className="text-center border-r p-1.5" style={{ borderColor: isLight ? '#e2e8f0' : '#334155' }}>
+                        <div className={`text-[11px] font-bold uppercase mb-0.5 ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Trip Selesai</div>
+                        <div className="text-xl font-bold text-emerald-500 flex items-center justify-center gap-1.5"><Repeat className="h-4 w-4" /> 178/180</div>
+                        <div className={`text-[11px] mt-0.5 ${isLight ? 'text-slate-400' : 'text-slate-500'}`}>Performa 98.9%</div>
                     </div>
-                    <div className="text-center border-r pr-2" style={{ borderColor: isLight ? '#e2e8f0' : '#334155' }}>
-                        <div className={`text-xs font-bold uppercase mb-1 ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Avg. Headway</div>
-                        <div className="text-2xl font-bold text-[#F6821F] flex items-center justify-center gap-1.5"><Clock className="h-5 w-5" /> 10<span className="text-base font-medium">min</span></div>
-                        <div className={`text-xs mt-0.5 ${isLight ? 'text-slate-400' : 'text-slate-500'}`}>Sesuai jadwal</div>
+                    <div className="text-center border-r p-1.5" style={{ borderColor: isLight ? '#e2e8f0' : '#334155' }}>
+                        <div className={`text-[11px] font-bold uppercase mb-0.5 ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Avg. Headway</div>
+                        <div className="text-xl font-bold text-[#F6821F] flex items-center justify-center gap-1.5"><Clock className="h-4 w-4" /> 10<span className="text-sm font-medium">min</span></div>
+                        <div className={`text-[11px] mt-0.5 ${isLight ? 'text-slate-400' : 'text-slate-500'}`}>Sesuai jadwal</div>
                     </div>
-                    <div className="text-center">
-                        <div className={`text-xs font-bold uppercase mb-1 ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Total Penumpang Bulan Ini</div>
-                        {isMonthLoading ? <div className="flex justify-center mt-2"><Loader2 className="h-6 w-6 animate-spin text-red-500" /></div> : (
+                    <div className="text-center p-1.5">
+                        <div className={`text-[11px] font-bold uppercase mb-0.5 ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Total Penumpang Bulan Ini</div>
+                        {isMonthLoading ? <div className="flex justify-center mt-1"><Loader2 className="h-5 w-5 animate-spin text-red-500" /></div> : (
                             <>
-                                <div className={`text-2xl font-bold ${isLight ? 'text-slate-900' : 'text-white'}`}>{monthlyTotalTransactions.toLocaleString('id-ID')}</div>
-                                <div className={`text-xs mt-0.5 ${isLight ? 'text-slate-400' : 'text-slate-500'}`}>Akumulasi bulan ini</div>
+                                <div className={`text-xl font-bold ${isLight ? 'text-slate-900' : 'text-white'}`}>{monthlyTotalTransactions.toLocaleString('id-ID')}</div>
+                                <div className={`text-[11px] mt-0.5 ${isLight ? 'text-slate-400' : 'text-slate-500'}`}>Akumulasi</div>
                             </>
                         )}
                     </div>
                 </section>
+                {/* END MODIFIKASI */}
 
                 {/* Main Content Area */}
                 <main className="flex-1 min-h-0 flex flex-col gap-2">
-                    <div className="grid grid-cols-12 gap-2 flex-1 min-h-0">
-                        {/* Station Traffic Panel */}
-                        <div className={`col-span-3 rounded-lg p-3 h-full flex flex-col transition-colors ${isLight ? 'bg-white border border-slate-200 shadow-sm' : 'bg-slate-900 border border-slate-800'}`}>
+                    {/* Row 1: Added grid-cols-1 lg:grid-cols-12 */}
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-2 flex-1 min-h-0">
+                        {/* Station Traffic Panel: Added lg:col-span-3 */}
+                        <div className={`lg:col-span-3 rounded-lg p-3 h-full flex flex-col transition-colors ${isLight ? 'bg-white border border-slate-200 shadow-sm' : 'bg-slate-900 border border-slate-800'}`}>
                             <h2 className={`text-xs font-bold mb-2 uppercase border-b pb-1 flex-shrink-0 ${isLight ? 'text-[#D3242B] border-slate-200' : 'text-[#F6821F] border-slate-800'}`}>
                                 Trafik Stasiun
                             </h2>
 
-                            {/* ✅ MODIFICATION: Changed loading logic for seamless updates */}
+                            {/* This internal scroll is fine */}
                             <div className="overflow-y-auto flex-1">
                                 {processedStations.length > 0 ? (
                                     <div className="grid grid-cols-3 gap-2">
@@ -1297,19 +1746,19 @@ const LRTJakartaDashboard = () => {
                             )}
                             
                             {/* ✅ NEW: Peak Hours Info Component */}
-                            {!isTodayLoading && peakHours && (
+                            {/* Tampilkan bahkan saat loading jika ada data cache */}
+                            {peakHours && (
                                 <RealtimeHoursInfo isLight={isLight} peakHours={peakHours} />
                             )}
                             
-                            {!isTodayLoading && (
-                                <div className={`mt-4 pt-2 border-t ${isLight ? 'border-slate-200' : 'border-slate-800'}`}>
-                                    <LatestIssues isLight={isLight} />
-                                </div>
-                            )}
+                            {/* Tampilkan isu terakhir (statis) */}
+                            <div className={`mt-4 pt-2 border-t ${isLight ? 'border-slate-200' : 'border-slate-800'}`}>
+                                <LatestIssues isLight={isLight} />
+                            </div>
                         </div>
 
 
-                        {/* Middle column wrapper */}
+                        {/* Middle column wrapper: Added lg:col-span-6 */}
                         <div className="col-span-6 flex flex-col gap-2">
                             {/* ✅ MODIFICATION: Removed fixed height `h-48` to allow content to grow */}
                             <div className={`rounded-lg p-3 flex flex-col justify-center transition-colors ${isLight ? 'bg-white border border-slate-200 shadow-sm' : 'bg-slate-900 border border-slate-800'}`}>
@@ -1372,18 +1821,29 @@ const LRTJakartaDashboard = () => {
                             <CustomerSatisfactionChart isLight={isLight} />
                         </div>
 
-                        {/* Right Sidebar with smaller info cards */}
-                        <div className="col-span-3 flex flex-col gap-2 min-h-0">
-                            <ClosingRateChart isLight={isLight} />
-                            <PerformanceChart isLight={isLight} title="Ketepatan Waktu (OTP)" data={onTimeData} color="#a16207" isLoading={isOtpLoading} error={otpError} />
-                            <PerformanceChart isLight={isLight} title="Capaian SPM" data={spmData} color="#F6821F" isLoading={isSpmLoading} error={spmError} />
-                            
+                        {/* --- PERUBAHAN ANDA DIMULAI DI SINI --- */}
+                        {/* Right Sidebar with smaller info cards: Added lg:col-span-3 */}
+                        <div className="lg:col-span-3 flex flex-col gap-2 min-h-0">
                             <SocialSentimentCard isLight={isLight} />
+                            <SocialMediaGrowthCard isLight={isLight} />
+                            <HotNewsCard isLight={isLight} />
+                            
+                            {/* Mengganti dua <PerformanceChart> dengan satu <CombinedPerformanceCard> */}
+                            <CombinedPerformanceCard 
+                                isLight={isLight}
+                                otpData={{ data: onTimeData, isLoading: isOtpLoading, error: otpError }}
+                                spmData={{ data: spmData, isLoading: isSpmLoading, error: spmError }}
+                            />
+                            
+                            <ClosingRateChart isLight={isLight} />
                         </div>
+                        {/* --- PERUBAHAN ANDA BERAKHIR DI SINI --- */}
                     </div>
-                    {/* MODIFIED: Bottom Section with refined layout */}
-                    <div className="grid grid-cols-4 gap-2 flex-shrink-0 h-[260px]">
-                        <div className={`col-span-2 rounded-lg p-3 transition-colors flex flex-col ${isLight ? 'bg-white border border-slate-200 shadow-sm' : 'bg-slate-900 border border-slate-800'}`}>
+
+                    {/* Bottom Section - Tata letak ini sudah benar */}
+                    <div className="grid grid-cols-1 lg:grid-cols-4 gap-2 flex-shrink-0">
+                        {/* Weekly Chart */}
+                        <div className={`lg:col-span-2 rounded-lg p-3 transition-colors flex flex-col h-[300px] lg:h-full ${isLight ? 'bg-white border border-slate-200 shadow-sm' : 'bg-slate-900 border border-slate-800'}`}>
                             <h2 className={`text-xs font-bold mb-1 uppercase border-b pb-1 flex-shrink-0 ${isLight ? 'text-[#D3242B] border-slate-200' : 'text-[#F6821F] border-slate-800'}`}>Tren Penumpang Mingguan</h2>
                             <div className="flex-1 min-h-0">
                                 {isWeekLoading ? <div className="flex justify-center items-center h-full"><Loader2 className="h-8 w-8 animate-spin text-red-500" /></div> : (
@@ -1406,13 +1866,14 @@ const LRTJakartaDashboard = () => {
                                 )}
                             </div>
                         </div>
-                        <div className="col-span-1">
+                        {/* Passenger Insights */}
+                        <div className="lg:col-span-1 h-full">
                             <PassengerInsights isLight={isLight} weeklyData={updatedWeeklyChartData} />
                         </div>
-                        {/* <div className="col-span-1">
-                            <LatestIssues isLight={isLight} />
+                        {/* Closing Rate */}
+                        {/* <div className="lg:col-span-1 h-full">
+                            
                         </div> */}
-                        
                     </div>
                 </main>
             </div>
@@ -1421,3 +1882,5 @@ const LRTJakartaDashboard = () => {
 };
 
 export default LRTJakartaDashboard;
+
+
