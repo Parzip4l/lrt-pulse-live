@@ -237,8 +237,8 @@ const useTrafficData = (options) => {
         // ... (fungsi performLogin tidak berubah) ...
         try {
             
-            // const response = await fetch("/api/index.php/login/doLogin", {
-            const response = await fetch("http://36.92.28.99/lrt_jakpro_api/index.php/login/doLogin", {
+            const response = await fetch("/api/index.php/login/doLogin", {
+            // const response = await fetch("http://36.92.28.99/lrt_jakpro_api/index.php/login/doLogin", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
@@ -275,8 +275,8 @@ const useTrafficData = (options) => {
     const fetchTrafficData = useCallback(async (start, end, currentToken) => {
         
         try {
-            // const response = await fetch("/api/index.php/transaction/list_gate_out_prepaid_trx", {
-            const response = await fetch("http://36.92.28.99/lrt_jakpro_api/index.php/transaction/list_gate_out_prepaid_trx", {
+            const response = await fetch("/api/index.php/transaction/list_gate_out_prepaid_trx", {
+            // const response = await fetch("http://36.92.28.99/lrt_jakpro_api/index.php/transaction/list_gate_out_prepaid_trx", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
@@ -989,7 +989,7 @@ const CustomerSatisfactionChart = ({ isLight }) => {
                 
                 {/* Bagian Kiri: Line Chart */}
                 <div className="flex flex-col">
-                    <h3 className={`text-sm font-bold text-center mb-2 ${isLight ? 'text-slate-700' : 'text-slate-300'}`}>Rekam Capaian Kepuasan Tahunan</h3>
+                    <h3 className={`text-sm font-bold text-center mb-2 ${isLight ? 'text-slate-700' : 'text-slate-300'}`}>Annual Satisfaction Record</h3>
                     <div className="flex-1">
                         <ResponsiveContainer width="100%" height="100%">
                             <LineChart data={lineData} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
@@ -1007,7 +1007,7 @@ const CustomerSatisfactionChart = ({ isLight }) => {
 
                 {/* Bagian Kanan: Pie Charts */}
                 <div className="flex flex-col justify-center">
-                    <h3 className={`text-sm font-bold text-center mb-4 ${isLight ? 'text-slate-700' : 'text-slate-300'}`}>Capaian Per Triwulan - {currentYear}</h3>
+                    <h3 className={`text-sm font-bold text-center mb-4 ${isLight ? 'text-slate-700' : 'text-slate-300'}`}>Quarterly Achievement - {currentYear}</h3>
                     {/* --- PERUBAHAN DI SINI: Menggunakan pieGridClass --- */}
                     <div className={`grid ${pieGridClass} gap-2`}>
                         {pieData.map(d => <PieChartCard key={d.name} data={d} isLight={isLight} />)}
@@ -1291,33 +1291,33 @@ const PassengerInsights = ({ isLight, weeklyData }) => {
 
     return (
         <div className={`rounded-lg p-3 flex-shrink-0 transition-colors h-full flex flex-col ${isLight ? 'bg-white border border-slate-200 shadow-sm' : 'bg-slate-900 border border-slate-800'}`}>
-            <h2 className={`text-xs font-bold mb-2 uppercase border-b pb-1 flex-shrink-0 ${isLight ? 'text-[#D3242B] border-slate-200' : 'text-[#F6821F] border-slate-800'}`}>Analisis & Proyeksi Penumpang</h2>
+            <h2 className={`text-xs font-bold mb-2 uppercase border-b pb-1 flex-shrink-0 ${isLight ? 'text-[#D3242B] border-slate-200' : 'text-[#F6821F] border-slate-800'}`}>Passenger Analysis & Projection</h2>
             <div className="flex-1 grid grid-rows-2 gap-3">
                 {/* Weekday vs Weekend */}
                 <div className="flex flex-col">
-                    <h3 className={`text-sm font-bold text-center mb-2 ${isLight ? 'text-slate-700' : 'text-slate-300'}`}>Perbandingan Weekday vs Weekend</h3>
+                    <h3 className={`text-sm font-bold text-center mb-2 ${isLight ? 'text-slate-700' : 'text-slate-300'}`}>Weekday vs Weekend Comparison</h3>
                     <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-4 text-center">
                         <div>
-                            <div className={`text-xs font-bold uppercase ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Rata-Rata Weekday</div>
+                            <div className={`text-xs font-bold uppercase ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Average Weekday</div>
                             <div className={`text-2xl font-bold mt-1 ${isLight ? 'text-slate-900' : 'text-white'}`}>{Math.round(avgWeekday).toLocaleString('id-ID')}</div>
-                            <div className={`text-xs mt-0.5 ${isLight ? 'text-slate-400' : 'text-slate-500'}`}>({weekdays.length} hari)</div>
+                            <div className={`text-xs mt-0.5 ${isLight ? 'text-slate-400' : 'text-slate-500'}`}>({weekdays.length} Day)</div>
                         </div>
                         <div>
-                            <div className={`text-xs font-bold uppercase ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Rata-Rata Weekend</div>
+                            <div className={`text-xs font-bold uppercase ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Average Weekend</div>
                             <div className={`text-2xl font-bold mt-1 ${isLight ? 'text-slate-900' : 'text-white'}`}>{Math.round(avgWeekend).toLocaleString('id-ID')}</div>
-                            <div className={`text-xs mt-0.5 ${isLight ? 'text-slate-400' : 'text-slate-500'}`}>({weekends.length} hari)</div>
+                            <div className={`text-xs mt-0.5 ${isLight ? 'text-slate-400' : 'text-slate-500'}`}>({weekends.length} Day)</div>
                         </div>
                     </div>
                 </div>
                 {/* Forecast */}
                 <div className={`flex flex-col items-center justify-center rounded-lg p-2 ${isLight ? 'bg-slate-50' : 'bg-slate-800/50'}`}>
-                    <h3 className={`text-sm font-bold text-center mb-2 ${isLight ? 'text-slate-700' : 'text-slate-300'}`}>Proyeksi Penumpang Besok</h3>
+                    <h3 className={`text-sm font-bold text-center mb-2 ${isLight ? 'text-slate-700' : 'text-slate-300'}`}>Projected Passengers Tomorrow</h3>
                     <div className="text-center">
                         <div className="flex items-center justify-center gap-2">
                             <BrainCircuit className="w-8 h-8 text-[#F6821F]" />
                             <div className={`text-3xl font-bold ${isLight ? 'text-slate-900' : 'text-white'}`}>~{Math.round(forecast).toLocaleString('id-ID')}</div>
                         </div>
-                        <div className={`text-xs mt-1 ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Berdasarkan tren 3 hari sebelumnya</div>
+                        <div className={`text-xs mt-1 ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Based on the trend from the past 3 days</div>
                     </div>
                 </div>
             </div>
@@ -1334,7 +1334,7 @@ const LatestIssues = ({ isLight }) => {
     ];
     return (
         <div className={` ${isLight ? 'bg-white' : 'bg-slate-900'}`}>
-            <h2 className={`text-xs font-bold mb-2 uppercase border-b pb-1 ${isLight ? 'text-[#D3242B] border-slate-200' : 'text-[#F6821F] border-slate-800'}`}>Isu Terakhir</h2>
+            <h2 className={`text-xs font-bold mb-2 uppercase border-b pb-1 ${isLight ? 'text-[#D3242B] border-slate-200' : 'text-[#F6821F] border-slate-800'}`}>Last Issue</h2>
             <div className="space-y-1.5 flex-1 flex flex-col justify-center">
                 {issues.map((item, idx) => (
                     <div key={idx} className={`border-l-4 pl-2 ${item.status === 'Resolved' ? 'border-emerald-500' : 'border-amber-500'}`}>
@@ -1502,7 +1502,7 @@ const SocialMediaGrowthCard = ({ isLight }) => {
              <div className={`absolute inset-0 flex flex-col items-center justify-center rounded-lg ${isLight ? 'bg-white/80' : 'bg-slate-950/80'} backdrop-blur-sm`}>
                 <Target className={`h-10 w-10 mb-2 ${isLight ? 'text-slate-400' : 'text-slate-600'}`} />
                 <h3 className={`text-sm font-bold text-center ${isLight ? 'text-slate-700' : 'text-slate-300'}`}>
-                    Pertumbuhan Sosmed
+                    Social Media Growth
                 </h3>
                 <span className={`mt-1 text-xs font-semibold px-2 py-0.5 rounded-full ${isLight ? 'bg-blue-100 text-blue-700' : 'bg-blue-500/20 text-blue-400'}`}>
                     COMING SOON
@@ -1526,16 +1526,16 @@ const RealtimeHoursInfo = ({ isLight, peakHours }) => {
 
     return (
       <div className={`mt-3 pt-2 border-t ${isLight ? 'border-slate-200' : 'border-slate-800'}`}>
-        <h3 className={`text-xs font-bold uppercase mb-2 ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Analisis Jam Sibuk (Hari Ini)</h3>
+        <h3 className={`text-xs font-bold uppercase mb-2 ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Peak Hour Analysis (Today)</h3>
         <div className="space-y-1.5 text-xs">
           <div className="flex items-center justify-between">
-            <span className={`${isLight ? 'text-slate-600' : 'text-slate-300'}`}>Jam Tersibuk</span>
+            <span className={`${isLight ? 'text-slate-600' : 'text-slate-300'}`}>Busiest Hour</span>
             <span className={`font-bold px-2 py-0.5 rounded-full text-xs ${isLight ? 'bg-amber-100 text-amber-700' : 'bg-amber-500/20 text-amber-400'}`}>
               {peakHours ? formatHourRange(peakHours.busiest) : 'Menghitung...'}
             </span>
           </div>
           <div className="flex items-center justify-between">
-            <span className={`${isLight ? 'text-slate-600' : 'text-slate-300'}`}>Jam Tersepi</span>
+            <span className={`${isLight ? 'text-slate-600' : 'text-slate-300'}`}>Least Busy Hour</span>
             <span className={`font-bold px-2 py-0.5 rounded-full text-xs ${isLight ? 'bg-emerald-100 text-emerald-700' : 'bg-emerald-500/20 text-emerald-400'}`}>
               {peakHours ? formatHourRange(peakHours.quietest) : 'Menghitung...'}
             </span>
@@ -1733,30 +1733,30 @@ const LRTJakartaDashboard = () => {
                 {/* MODIFIKASI: Top KPI Bar - Dibuat lebih ringkas */}
                 <section className={`grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-1 mb-2 flex-shrink-0 rounded-lg p-1 transition-colors ${isLight ? 'bg-white border border-slate-200 shadow-sm' : 'bg-slate-900 border border-slate-800'}`}>
                     <div className="text-center p-1.5">
-                        <div className={`text-[11px] font-bold uppercase mb-0.5 ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Penumpang Hari Ini</div>
+                        <div className={`text-[11px] font-bold uppercase mb-0.5 ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Passengers Today</div>
                         <div className={`text-xl font-bold ${isLight ? 'text-slate-900' : 'text-white'}`}>{todayTotalTransactions.toLocaleString('id-ID')}</div>
-                        <div className={`text-[11px] mt-0.5 ${isLight ? 'text-slate-400' : 'text-slate-500'}`}>on going (ex KLG & Qr)</div>
+                        <div className={`text-[11px] mt-0.5 ${isLight ? 'text-slate-400' : 'text-slate-500'}`}>on going (ex KLG & QR)</div>
                     </div>
                     <div className="text-center border-l p-1.5" style={{ borderColor: isLight ? '#e2e8f0' : '#334155' }}>
-                        <div className={`text-[11px] font-bold uppercase mb-0.5 ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Penumpang Kemarin</div>
+                        <div className={`text-[11px] font-bold uppercase mb-0.5 ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Passengers Yesterday</div>
                         <div className={`text-xl font-bold ${isLight ? 'text-slate-900' : 'text-white'}`}>{yesterdayTotal.toLocaleString('id-ID')}</div>
-                        <div className={`text-[11px] mt-0.5 ${isLight ? 'text-slate-400' : 'text-slate-500'}`}>Total Harian (ex KLG & Qr)</div>
+                        <div className={`text-[11px] mt-0.5 ${isLight ? 'text-slate-400' : 'text-slate-500'}`}>Daily Total (ex KLG & QR)</div>
                     </div>
                     <div className="text-center border-l p-1.5" style={{ borderColor: isLight ? '#e2e8f0' : '#334155' }}>
-                        <div className={`text-[11px] font-bold uppercase mb-0.5 ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Penumpang Bulan Ini</div>
+                        <div className={`text-[11px] font-bold uppercase mb-0.5 ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Passengers This Month</div>
                         {isMonthLoading ? <div className="flex justify-center mt-1"><Loader2 className="h-5 w-5 animate-spin text-red-500" /></div> : (
                             <>
                                 <div className={`text-xl font-bold ${isLight ? 'text-slate-900' : 'text-white'}`}>{monthlyTotalTransactions.toLocaleString('id-ID')}</div>
-                                <div className={`text-[11px] mt-0.5 ${isLight ? 'text-slate-400' : 'text-slate-500'}`}>Akumulasi (ex KLG & Qr)</div>
+                                <div className={`text-[11px] mt-0.5 ${isLight ? 'text-slate-400' : 'text-slate-500'}`}>Cumulative (ex KLG & QR)</div>
                             </>
                         )}
                     </div>
                      <div className="text-center border-l border-r p-1.5" style={{ borderColor: isLight ? '#e2e8f0' : '#334155' }}>
-                        <div className={`text-[11px] font-bold uppercase mb-0.5 ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Penumpang Bulan Lalu</div>
+                        <div className={`text-[11px] font-bold uppercase mb-0.5 ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Passengers Last Month</div>
                         {isPrevMonthLoading ? <div className="flex justify-center mt-1"><Loader2 className="h-5 w-5 animate-spin text-red-500" /></div> : (
                             <>
                                 <div className={`text-xl font-bold ${isLight ? 'text-slate-900' : 'text-white'}`}>{prevMonthTotalTransactions.toLocaleString('id-ID')}</div>
-                                <div className={`text-[11px] mt-0.5 ${isLight ? 'text-slate-400' : 'text-slate-500'}`}>Total Bulanan (ex KLG & Qr)</div>
+                                <div className={`text-[11px] mt-0.5 ${isLight ? 'text-slate-400' : 'text-slate-500'}`}>Cumulative (ex KLG & QR)</div>
                             </>
                         )}
                     </div>
@@ -1779,7 +1779,7 @@ const LRTJakartaDashboard = () => {
                         )}
                     </div>
                     <div className="text-center p-1.5">
-                        <div className={`text-[11px] font-bold uppercase mb-0.5 ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Trip Selesai</div>
+                        <div className={`text-[11px] font-bold uppercase mb-0.5 ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Completed Trips</div>
                         <div className="text-xl font-bold text-emerald-500 flex items-center justify-center gap-1.5"><Repeat className="h-4 w-4" /> 178/180</div>
                         <div className={`text-[11px] mt-0.5 ${isLight ? 'text-slate-400' : 'text-slate-500'}`}>Performa 98.9%</div>
                     </div>
@@ -1796,7 +1796,7 @@ const LRTJakartaDashboard = () => {
                         {/* --- PERUBAHAN DI SINI: Menghapus 'h-full' agar panel menyesuaikan tinggi konten --- */}
                         <div className={`md:col-span-5 lg:col-span-3 rounded-lg p-3 flex flex-col transition-colors ${isLight ? 'bg-white border border-slate-200 shadow-sm' : 'bg-slate-900 border border-slate-800'}`}>
                             <h2 className={`text-xs font-bold mb-2 uppercase border-b pb-1 flex-shrink-0 ${isLight ? 'text-[#D3242B] border-slate-200' : 'text-[#F6821F] border-slate-800'}`}>
-                                Trafik Stasiun
+                                Station Traffic
                             </h2>
 
                             {/* --- PERUBAHAN DI SINI: Menambahkan flex-1, min-h-0 agar bisa scroll --- */}
@@ -1846,7 +1846,7 @@ const LRTJakartaDashboard = () => {
                             {!isTodayLoading && processedStations.length > 0 && (
                                 <div className={`mt-3 pt-0 border-t flex-shrink-0 ${isLight ? 'border-slate-200' : 'border-slate-800'}`}>
                                     <div className="flex items-center justify-between text-xs mb-1">
-                                        <span className={`${isLight ? 'text-slate-500' : 'text-slate-400'} font-semibold`}>Legenda:</span>
+                                        <span className={`${isLight ? 'text-slate-500' : 'text-slate-400'} font-semibold`}>Legend:</span>
                                     </div>
                                     <div className="grid grid-cols-3 gap-2 text-xs">
                                         <div className="flex items-center gap-1.5">
@@ -1947,7 +1947,7 @@ const LRTJakartaDashboard = () => {
                     <div className="grid grid-cols-1 lg:grid-cols-4 gap-2 flex-shrink-0">
                         {/* Weekly Chart */}
                         <div className={`lg:col-span-2 rounded-lg p-3 transition-colors flex flex-col h-[300px] lg:h-full ${isLight ? 'bg-white border border-slate-200 shadow-sm' : 'bg-slate-900 border border-slate-800'}`}>
-                            <h2 className={`text-xs font-bold mb-1 uppercase border-b pb-1 flex-shrink-0 ${isLight ? 'text-[#D3242B] border-slate-200' : 'text-[#F6821F] border-slate-800'}`}>Tren Penumpang Mingguan</h2>
+                            <h2 className={`text-xs font-bold mb-1 uppercase border-b pb-1 flex-shrink-0 ${isLight ? 'text-[#D3242B] border-slate-200' : 'text-[#F6821F] border-slate-800'}`}>Passenger Trend (Weekly)</h2>
                             <div className="flex-1 min-h-0">
                                 {/* --- PERUBAHAN DI SINI: Menggunakan updatedWeeklyChartData untuk kondisi loading --- */}
                                 {isWeekLoading && (!updatedWeeklyChartData || updatedWeeklyChartData.length === 0) ? <div className="flex justify-center items-center h-full"><Loader2 className="h-8 w-8 animate-spin text-red-500" /></div> : (
