@@ -237,8 +237,8 @@ const useTrafficData = (options) => {
         // ... (fungsi performLogin tidak berubah) ...
         try {
             
-            // const response = await fetch("/api/index.php/login/doLogin", {
-            const response = await fetch("http://36.92.28.99/lrt_jakpro_api/index.php/login/doLogin", {
+            const response = await fetch("/api/index.php/login/doLogin", {
+            // const response = await fetch("http://36.92.28.99/lrt_jakpro_api/index.php/login/doLogin", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
@@ -275,8 +275,8 @@ const useTrafficData = (options) => {
     const fetchTrafficData = useCallback(async (start, end, currentToken) => {
         
         try {
-            // const response = await fetch("/api/index.php/transaction/list_gate_out_prepaid_trx", {
-            const response = await fetch("http://36.92.28.99/lrt_jakpro_api/index.php/transaction/list_gate_out_prepaid_trx", {
+            const response = await fetch("/api/index.php/transaction/list_gate_out_prepaid_trx", {
+            // const response = await fetch("http://36.92.28.99/lrt_jakpro_api/index.php/transaction/list_gate_out_prepaid_trx", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
