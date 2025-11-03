@@ -250,7 +250,7 @@ const useTrafficData = (options) => {
             });
 
             if (!response.ok) {
-                throw new Error(`Login failed with status: ${response.status}`);
+                throw new Error(`Login failed with statuss: ${response.status}`);
             }
 
             const result = await response.json();
