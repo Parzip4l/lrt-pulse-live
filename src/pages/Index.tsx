@@ -12,7 +12,7 @@ import {
 
 // --- SVG Icons ---
 // A simple loader component used when data is being fetched.
-const Loader2 = ({ className }) => (<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M21 12a9 9 0 1 1-6.219-8.56" /></svg>);
+const Loader2 = ({ className }) => (<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M21 12a9 9 0 1 1-6.219-8.56" /></svg>);
 
 // --- Interfaces ---
 // Defines the structure for a single traffic data record from the API.
@@ -99,9 +99,12 @@ const useTrafficData = (options) => {
     // Helper to get cache key for today
     const getTodayCacheKey = () => `traffic-data-today-${formatDate(new Date())}`;
 
-    // Function to load initial state from cache if available for 'today'
+    // Function to load initial state from cache if available
     const loadInitialState = () => {
-        const defaultState = { isLoading: true, stationSummary: {}, totalTransactions: 0, percentageChange: null, peakHours: null };
+        // --- PERUBAHAN DI SINI ---
+        // Menambahkan chartData ke defaultState agar bisa diisi oleh cache mingguan
+        const defaultState = { isLoading: true, stationSummary: {}, totalTransactions: 0, percentageChange: null, peakHours: null, yesterdayTotal: 0, chartData: [] };
+        // --- AKHIR PERUBAHAN ---
 
         if (defaultRange === 'today') {
             try {
@@ -114,11 +117,13 @@ const useTrafficData = (options) => {
                     // Cache for today is valid for 2 minutes
                     if (cacheAge < 2 * 60 * 1000) { 
                         return {
+                            ...defaultState, // <- Mulai dari default
                             isLoading: false, // <-- KEY CHANGE: Load instantly
                             stationSummary: data.stationSummary,
                             totalTransactions: data.totalTransactions,
                             percentageChange: data.percentageChange,
                             peakHours: data.peakHours,
+                            yesterdayTotal: data.yesterdayTotal || 0, // <-- Load yesterday's total
                         };
                     }
                 }
@@ -156,6 +161,28 @@ const useTrafficData = (options) => {
             }
         }
         // --- MODIFICATION END ---
+        // --- PERUBAHAN DI SINI: Menambahkan logika cache 'week' saat inisialisasi ---
+        else if (defaultRange === 'week') {
+            const tempStartDate = new Date();
+            tempStartDate.setDate(tempStartDate.getDate() - 6);
+            const [year, week] = getWeekNumber(tempStartDate);
+            const cacheKey = `traffic-data-week-${year}-${week}`;
+            try {
+                const cachedItem = localStorage.getItem(cacheKey);
+                if (cachedItem) {
+                    const { chartData: cachedChartData } = JSON.parse(cachedItem);
+                    return {
+                        ...defaultState,
+                        isLoading: false, // Load instantly
+                        chartData: cachedChartData.map(d => ({...d, date: new Date(d.date)})) // Load stale data
+                    };
+                }
+            } catch (e) {
+                console.error("Failed to read 'week' cache", e);
+                localStorage.removeItem(cacheKey);
+            }
+        }
+        // --- AKHIR PERUBAHAN ---
         
         // Default if no cache or expired
         return defaultState;
@@ -172,10 +199,21 @@ const useTrafficData = (options) => {
             date.setDate(date.getDate() - 6);
         } else if (defaultRange === 'month') {
             date.setDate(1);
+        } else if (defaultRange === 'previous-month') { // <-- NEW
+            date.setDate(1); // Go to 1st of current month
+            date.setMonth(date.getMonth() - 1); // Go to 1st of previous month
         }
         return date;
     });
-    const [endDate, setEndDate] = useState(new Date());
+    const [endDate, setEndDate] = useState(() => {
+        if (defaultRange === 'previous-month') { // <-- NEW
+            const date = new Date();
+            date.setDate(1); // 1st of current
+            date.setDate(date.getDate() - 1); // Last day of previous month
+            return date;
+        }
+        return new Date(); // Default
+    });
 
     // State for managing API authentication token, loading status, and errors.
     const [token, setToken] = useState < string | null > (null);
@@ -184,11 +222,14 @@ const useTrafficData = (options) => {
     const [error, setError] = useState < string | null > (null);
 
     // State for storing processed data ready for display.
-    const [chartData, setChartData] = useState < ChartData[] > ([]);
+    // --- PERUBAHAN DI SINI: Menggunakan initialState.chartData ---
+    const [chartData, setChartData] = useState < ChartData[] > (initialState.chartData);
+    // --- AKHIR PERUBAHAN ---
     const [stationSummary, setStationSummary] = useState < StationSummary > (initialState.stationSummary);
     const [totalTransactions, setTotalTransactions] = useState(initialState.totalTransactions); 
     const [percentageChange, setPercentageChange] = useState < number | null > (initialState.percentageChange);
     const [peakHours, setPeakHours] = useState<{ busiest: number, quietest: number } | null>(initialState.peakHours);
+    const [yesterdayTotal, setYesterdayTotal] = useState(initialState.yesterdayTotal); // <-- NEW state
     // --- END OF MODIFICATION ---
 
     // useCallback is used to memoize the login function, preventing re-creation on every render.
@@ -297,7 +338,7 @@ const useTrafficData = (options) => {
             setError(null);
 
             // --- CACHING LOGIC (Hanya untuk 'month' dan 'week', 'today' ditangani saat inisialisasi) ---
-            if (defaultRange === 'month') {
+            if (defaultRange === 'month' || defaultRange === 'previous-month') { // <-- Modified
                 // ... (logika cache 'month' tidak berubah) ...
                 const cacheKey = `traffic-data-${formatDate(startDate).substring(0, 7)}`; // e.g., "traffic-data-2023-10"
                 try {
@@ -435,8 +476,14 @@ const useTrafficData = (options) => {
 
 
                 // ... (logika proses yesterdayData) ...
-                if (yesterdayData && yesterdayData.rows) {
+                let yesterdayFullTotal = 0; // <-- NEW
+                if (yesterdayData) { // <-- FIX: Check for yesterdayData, not just rows
                     
+                    yesterdayFullTotal = yesterdayData.total; // <-- FIX: Use yesterdayData.total
+                    if (isMounted) {
+                        setYesterdayTotal(yesterdayFullTotal); // <-- This now sets the correct total
+                    }
+
                     const yesterdayRowsUntilNow = (defaultRange === 'today')
                         ? yesterdayData.rows.filter(row => new Date(row.gate_out_on_dtm) <= now)
                         : yesterdayData.rows;
@@ -459,9 +506,10 @@ const useTrafficData = (options) => {
                 }
 
                 // ... (logika siapkan chartData 'week') ...
+                let chartDataResult: ChartData[] = []; // <-- Define outside if
                 if (defaultRange === 'week') {
                     const diffDays = Math.max(1, Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 3600 * 24)) + 1);
-                    const chartDataResult: ChartData[] = Array.from({ length: diffDays }, (_, i) => {
+                    chartDataResult = Array.from({ length: diffDays }, (_, i) => {
                         const date = new Date(startDate);
                         date.setDate(date.getDate() + i);
                         const dayStr = formatDate(date);
@@ -498,7 +546,7 @@ const useTrafficData = (options) => {
                 }
 
                 // --- CACHE SAVING LOGIC START ---
-                if (defaultRange === 'month') {
+                if (defaultRange === 'month' || defaultRange === 'previous-month') { // <-- Modified
                     // ... (cache 'month' tidak berubah)
                     const cacheKey = `traffic-data-${formatDate(startDate).substring(0, 7)}`;
                         try {
@@ -517,7 +565,7 @@ const useTrafficData = (options) => {
                     const cacheKey = `traffic-data-week-${year}-${week}`;
                     try {
                         const itemToCache = {
-                            chartData: chartData, // chartData sudah di-set di atas
+                            chartData: chartDataResult, // <-- FIX: Use chartDataResult
                             timestamp: Date.now()
                         };
                         localStorage.setItem(cacheKey, JSON.stringify(itemToCache));
@@ -536,6 +584,7 @@ const useTrafficData = (options) => {
                                 totalTransactions: mainData.total,
                                 percentageChange: currentPercentageChange,
                                 peakHours: currentPeakHours,
+                                yesterdayTotal: yesterdayFullTotal, // <-- Save yesterday's total
                             },
                             timestamp: Date.now()
                         };
@@ -574,7 +623,7 @@ const useTrafficData = (options) => {
         return () => { isMounted = false; };
     }, [startDate, endDate, performLogin, fetchTrafficData, defaultRange, refreshInterval]); // Dependencies MODIFIED: removed 'token'
 
-    return { isLoading, error, chartData, stationSummary, totalTransactions, percentageChange, peakHours };
+    return { isLoading, error, chartData, stationSummary, totalTransactions, percentageChange, peakHours, yesterdayTotal };
 };
 
 // --- Social Media Sentiment Component ---
@@ -598,9 +647,9 @@ const SocialSentimentCard = ({ isLight }) => {
     ];
 
     return (
-        <div className={`rounded-lg p-3 flex-shrink-0 transition-colors h-100 flex flex-col ${isLight ? 'bg-white border border-slate-200 shadow-sm' : 'bg-slate-900 border border-slate-800'}`}>
+        <div className={`relative rounded-lg p-3 flex-shrink-0 transition-colors h-100 flex flex-col ${isLight ? 'bg-white border border-slate-200 shadow-sm' : 'bg-slate-900 border border-slate-800'}`}>
             <h2 className={`text-xs font-bold mb-2 uppercase border-b pb-1 flex-shrink-0 ${isLight ? 'text-[#D3242B] border-slate-200' : 'text-[#F6821F] border-slate-800'}`}>Sentimen Media Sosial</h2>
-            <div className="flex-1 flex items-center justify-center">
+            <div className="flex-1 flex items-center justify-center blur-sm"> {/* Added blur-sm */}
                 {/* ✅ MODIFICATION: Changed to a grid layout without progress bars */}
                 <div className="grid grid-cols-3 gap-4 text-center w-full">
                     {sentiments.map(sentiment => (
@@ -615,6 +664,17 @@ const SocialSentimentCard = ({ isLight }) => {
                         </div>
                     ))}
                 </div>
+            </div>
+
+            {/* Transparent Overlay */}
+            <div className={`absolute inset-0 flex flex-col items-center justify-center rounded-lg ${isLight ? 'bg-white/80' : 'bg-slate-950/80'} backdrop-blur-sm`}>
+                <Target className={`h-10 w-10 mb-2 ${isLight ? 'text-slate-400' : 'text-slate-600'}`} />
+                <h3 className={`text-sm font-bold ${isLight ? 'text-slate-700' : 'text-slate-300'}`}>
+                    Sentimen Media Sosial
+                </h3>
+                <span className={`mt-1 text-xs font-semibold px-2 py-0.5 rounded-full ${isLight ? 'bg-blue-100 text-blue-700' : 'bg-blue-500/20 text-blue-400'}`}>
+                    COMING SOON
+                </span>
             </div>
         </div>
     );
@@ -990,7 +1050,7 @@ const ClosingRateChart = ({ isLight }) => {
                             {barData.find(b => b.name === entry.name)['Closing Rate']}%
                         </span>
                     </div>
-                ))}
+                    ))}
                 </div>
             </div>
         </div>
@@ -1319,13 +1379,13 @@ const HotNewsCard = ({ isLight }) => {
     };
 
     return (
-        <div className={`rounded-lg p-2 shadow-sm transition-colors flex flex-col flex-1 ${isLight ? 'bg-white border border-slate-200' : 'bg-slate-900 border border-slate-800'}`}>
+        <div className={`relative rounded-lg p-2 shadow-sm transition-colors flex flex-col flex-1 ${isLight ? 'bg-white border border-slate-200' : 'bg-slate-900 border border-slate-800'}`}>
             <h2 className={`text-xs font-bold mb-2 uppercase border-b pb-1 ${isLight ? 'text-[#D3242B] border-slate-200' : 'text-[#F6821F] border-slate-800'}`}>Hot News</h2>
-            <div className="flex-1 overflow-hidden">
+            <div className="flex-1 overflow-hidden blur-sm"> {/* Added blur-sm */}
                 {renderContent()}
             </div>
             {/* Paging dots */}
-            <div className="flex justify-center space-x-1.5 mt-2">
+            <div className="flex justify-center space-x-1.5 mt-2 blur-sm"> {/* Added blur-sm */}
                 {newsData.map((_, index) => (
                     <div
                         key={index}
@@ -1347,6 +1407,17 @@ const HotNewsCard = ({ isLight }) => {
                 }
                 `}
             </style>
+
+            {/* Transparent Overlay */}
+            <div className={`absolute inset-0 flex flex-col items-center justify-center rounded-lg ${isLight ? 'bg-white/80' : 'bg-slate-950/80'} backdrop-blur-sm`}>
+                <Target className={`h-10 w-10 mb-2 ${isLight ? 'text-slate-400' : 'text-slate-600'}`} />
+                <h3 className={`text-sm font-bold ${isLight ? 'text-slate-700' : 'text-slate-300'}`}>
+                    Hot News
+                </h3>
+                <span className={`mt-1 text-xs font-semibold px-2 py-0.5 rounded-full ${isLight ? 'bg-blue-100 text-blue-700' : 'bg-blue-500/20 text-blue-400'}`}>
+                    COMING SOON
+                </span>
+            </div>
         </div>
     );
 };
@@ -1407,10 +1478,21 @@ const SocialMediaGrowthCard = ({ isLight }) => {
     };
 
     return (
-        <div className={`rounded-lg p-2 shadow-sm transition-colors flex flex-col ${isLight ? 'bg-white border border-slate-200' : 'bg-slate-900 border border-slate-800'}`}>
+        <div className={`relative rounded-lg p-2 shadow-sm transition-colors flex flex-col ${isLight ? 'bg-white border border-slate-200' : 'bg-slate-900 border border-slate-800'}`}>
             <h2 className={`text-xs font-bold mb-1 uppercase border-b pb-1 flex-shrink-0 ${isLight ? 'text-[#D3242B] border-slate-200' : 'text-[#F6821F] border-slate-800'}`}>Pertumbuhan Sosmed (Bulan Ini)</h2>
-            <div className="flex-1">
+            <div className="flex-1 blur-sm"> {/* Added blur-sm */}
                 {renderContent()}
+            </div>
+
+             {/* Transparent Overlay */}
+             <div className={`absolute inset-0 flex flex-col items-center justify-center rounded-lg ${isLight ? 'bg-white/80' : 'bg-slate-950/80'} backdrop-blur-sm`}>
+                <Target className={`h-10 w-10 mb-2 ${isLight ? 'text-slate-400' : 'text-slate-600'}`} />
+                <h3 className={`text-sm font-bold text-center ${isLight ? 'text-slate-700' : 'text-slate-300'}`}>
+                    Pertumbuhan Sosmed
+                </h3>
+                <span className={`mt-1 text-xs font-semibold px-2 py-0.5 rounded-full ${isLight ? 'bg-blue-100 text-blue-700' : 'bg-blue-500/20 text-blue-400'}`}>
+                    COMING SOON
+                </span>
             </div>
         </div>
     );
@@ -1435,13 +1517,13 @@ const RealtimeHoursInfo = ({ isLight, peakHours }) => {
           <div className="flex items-center justify-between">
             <span className={`${isLight ? 'text-slate-600' : 'text-slate-300'}`}>Jam Tersibuk</span>
             <span className={`font-bold px-2 py-0.5 rounded-full text-xs ${isLight ? 'bg-amber-100 text-amber-700' : 'bg-amber-500/20 text-amber-400'}`}>
-                {peakHours ? formatHourRange(peakHours.busiest) : 'Menghitung...'}
+              {peakHours ? formatHourRange(peakHours.busiest) : 'Menghitung...'}
             </span>
           </div>
           <div className="flex items-center justify-between">
             <span className={`${isLight ? 'text-slate-600' : 'text-slate-300'}`}>Jam Tersepi</span>
             <span className={`font-bold px-2 py-0.5 rounded-full text-xs ${isLight ? 'bg-emerald-100 text-emerald-700' : 'bg-emerald-500/20 text-emerald-400'}`}>
-                {peakHours ? formatHourRange(peakHours.quietest) : 'Menghitung...'}
+              {peakHours ? formatHourRange(peakHours.quietest) : 'Menghitung...'}
             </span>
           </div>
         </div>
@@ -1457,23 +1539,29 @@ const LRTJakartaDashboard = () => {
     const [currentTime, setCurrentTime] = useState(new Date());
     const [theme, setTheme] = useState('light');
     
-    // ✅ MODIFICATION: Added driver and speed to train data
-    const [trainPositions, setTrainPositions] = useState([
-        { id: 1, position: 10, direction: 1, driver: 'Ahmad S.', speed: 45 },
-        { id: 2, position: 50, direction: -1, driver: 'Budi P.', speed: 52 },
-        { id: 3, position: 85, direction: 1, driver: 'Citra W.', speed: 48 }
-    ]);
+    // --- PERUBAHAN DI SINI: Menghapus state trainPositions ---
+    // const [trainPositions, setTrainPositions] = useState([
+    //     { id: 1, position: 10, direction: 1, driver: 'Ahmad S.', speed: 45 },
+    //     { id: 2, position: 50, direction: -1, driver: 'Budi P.', speed: 52 },
+    //     { id: 3, position: 85, direction: 1, driver: 'Citra W.', speed: 48 }
+    // ]);
+    // --- AKHIR PERUBAHAN ---
 
     // Use the custom hook to fetch data for "Today" and "This Week".
     // MODIFICATION: Set a 15-second refresh interval for all API data sources.
     const {
-        isLoading: isTodayLoading, error, totalTransactions: todayTotalTransactions, percentageChange, stationSummary, peakHours
+        isLoading: isTodayLoading, error, totalTransactions: todayTotalTransactions, percentageChange, stationSummary, peakHours, yesterdayTotal
     } = useTrafficData({ defaultRange: 'today', refreshInterval: 15000 });
 
     const {
         totalTransactions: monthlyTotalTransactions,
         isLoading: isMonthLoading,
     } = useTrafficData({ defaultRange: 'month', refreshInterval: 15000 });
+
+    const {
+        totalTransactions: prevMonthTotalTransactions,
+        isLoading: isPrevMonthLoading,
+    } = useTrafficData({ defaultRange: 'previous-month', refreshInterval: 15000 });
 
     const {
         chartData: weeklyChartData,
@@ -1484,12 +1572,16 @@ const LRTJakartaDashboard = () => {
     const { data: onTimeData, isLoading: isOtpLoading, error: otpError } = usePerformanceData('OTP');
     const { data: spmData, isLoading: isSpmLoading, error: spmError } = usePerformanceData('SPM');
     
-    // MODIFICATION START: Calculate current month's OTP and Target
-    const currentMonthIndex = new Date().getMonth() + 1; // 1 for Jan, 2 for Feb, etc.
-    const currentMonthOtpData = onTimeData.find(d => d.monthIndex === currentMonthIndex);
-    const currentMonthOtpValue = currentMonthOtpData ? currentMonthOtpData.value : null;
-    const currentMonthOtpTarget = currentMonthOtpData ? currentMonthOtpData.target : null;
-    // MODIFICATION END
+    // --- MODIFICATION START: Calculate PREVIOUS month's OTP and Target ---
+    const today = new Date();
+    // Set date to 0 to get the last day of the *previous* month
+    const prevMonthDate = new Date(today.getFullYear(), today.getMonth(), 0); 
+    const prevMonthIndex = prevMonthDate.getMonth() + 1; // getMonth() will be 0-11 for the prev month, +1 makes it 1-12
+
+    const prevMonthOtpData = onTimeData.find(d => d.monthIndex === prevMonthIndex);
+    const prevMonthOtpValue = prevMonthOtpData ? prevMonthOtpData.value : null;
+    const prevMonthOtpTarget = prevMonthOtpData ? prevMonthOtpData.target : null;
+    // --- MODIFICATION END ---
 
     // --- FIX STARTS HERE ---
     // Blok ini memastikan data chart mingguan selalu sinkron dengan data "hari ini" yang terbaru.
@@ -1499,9 +1591,12 @@ const LRTJakartaDashboard = () => {
     // Ini menyelesaikan perbedaan data tanpa mengubah struktur hook pengambilan data yang sudah ada.
     const updatedWeeklyChartData = React.useMemo(() => {
         if (!weeklyChartData || weeklyChartData.length === 0) {
+            // Jika data MINGGUAN BELUM ada (loading atau cache kosong), KEMBALIKAN array kosong.
+            // Biarkan <Loader2> yang ditampilkan di bawah.
             return [];
         }
 
+        // Jika data mingguan ADA, lanjutkan dengan logika update
         const newChartData = [...weeklyChartData];
 
         const todayIndex = newChartData.findIndex(d => {
@@ -1531,24 +1626,25 @@ const LRTJakartaDashboard = () => {
         return () => clearInterval(timer);
     }, []);
 
-    // Effect to animate the simulated train positions.
-    useEffect(() => {
-        const interval = setInterval(() => {
-            setTrainPositions(prev => prev.map(train => {
-                let newPosition = train.position + (train.direction * 0.25);
-                let newDirection = train.direction;
-                if (newPosition >= 100) { newPosition = 100; newDirection = -1; }
-                else if (newPosition <= 0) { newPosition = 0; newDirection = 1; }
+    // --- PERUBAHAN DI SINI: Menghapus useEffect animasi kereta ---
+    // useEffect(() => {
+    //     const interval = setInterval(() => {
+    //         setTrainPositions(prev => prev.map(train => {
+    //             let newPosition = train.position + (train.direction * 0.25);
+    //             let newDirection = train.direction;
+    //             if (newPosition >= 100) { newPosition = 100; newDirection = -1; }
+    //             else if (newPosition <= 0) { newPosition = 0; newDirection = 1; }
                 
-                // ✅ MODIFICATION: Add speed simulation
-                const speedFluctuation = Math.random() * 4 - 2; // Random number between -2 and 2
-                let newSpeed = Math.max(30, Math.min(40, train.speed + speedFluctuation)); // Clamp speed between 30 and 70
+    //             // ✅ MODIFICATION: Add speed simulation
+    //             const speedFluctuation = Math.random() * 4 - 2; // Random number between -2 and 2
+    //             let newSpeed = Math.max(30, Math.min(40, train.speed + speedFluctuation)); // Clamp speed between 30 and 70
 
-                return { ...train, position: newPosition, direction: newDirection, speed: Math.round(newSpeed) };
-            }));
-        }, 100);
-        return () => clearInterval(interval);
-    }, []);
+    //             return { ...train, position: newPosition, direction: newDirection, speed: Math.round(newSpeed) };
+    //         }));
+    //     }, 100);
+    //     return () => clearInterval(interval);
+    // }, []);
+    // --- AKHIR PERUBAHAN ---
 
     // Function to toggle between light and dark themes.
     const toggleTheme = () => {
@@ -1621,46 +1717,24 @@ const LRTJakartaDashboard = () => {
                 </header>
 
                 {/* MODIFIKASI: Top KPI Bar - Dibuat lebih ringkas */}
-                <section className={`grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-1 mb-2 flex-shrink-0 rounded-lg p-1 transition-colors ${isLight ? 'bg-white border border-slate-200 shadow-sm' : 'bg-slate-900 border border-slate-800'}`}>
+                <section className={`grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-1 mb-2 flex-shrink-0 rounded-lg p-1 transition-colors ${isLight ? 'bg-white border border-slate-200 shadow-sm' : 'bg-slate-900 border border-slate-800'}`}>
                     <div className="text-center p-1.5">
                         <div className={`text-[11px] font-bold uppercase mb-0.5 ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Penumpang Hari Ini</div>
-                        <>
-                            <div className={`text-xl font-bold ${isLight ? 'text-slate-900' : 'text-white'}`}>{todayTotalTransactions.toLocaleString('id-ID')}</div>
-                            {percentageChange !== null && (
-                                <div className={`text-[11px] mt-0.5 ${isLight ? 'text-slate-400' : 'text-slate-500'}`}>
-                                    Semua Stasiun
-                                </div>
-                            )}
-                        </>
-                    </div>
-                    <div className="text-center border-l border-r p-1.5" style={{ borderColor: isLight ? '#e2e8f0' : '#334155' }}>
-                        <div className={`text-[11px] font-bold uppercase mb-0.5 ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>On-Time Performance</div>
-                        {isOtpLoading ? (
-                           <div className="flex justify-center mt-1"><Loader2 className="h-5 w-5 animate-spin text-emerald-500" /></div>
-                        ) : (
-                            <>
-                            <div className={`text-xl font-bold flex items-center justify-center gap-1.5 ${currentMonthOtpValue && currentMonthOtpTarget && currentMonthOtpValue >= currentMonthOtpTarget ? 'text-emerald-500' : 'text-amber-500'}`}>
-                                <CheckCircle className="h-4 w-4" />
-                                {currentMonthOtpValue !== null ? `${currentMonthOtpValue.toFixed(1)}%` : 'N/A'}
+                        <div className={`text-xl font-bold ${isLight ? 'text-slate-900' : 'text-white'}`}>{todayTotalTransactions.toLocaleString('id-ID')}</div>
+                        {percentageChange !== null && (
+                            <div className={`text-[11px] font-bold flex items-center justify-center ${percentageChange >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
+                                {percentageChange >= 0 ? <ArrowUp size={12} /> : <ArrowDown size={12} />}
+                                {percentageChange.toFixed(1)}% vs Kemarin
                             </div>
-                            <div className={`text-[11px] mt-0.5 ${isLight ? 'text-slate-400' : 'text-slate-500'}`}>
-                                Target: {currentMonthOtpTarget !== null ? `${currentMonthOtpTarget}%` : 'N/A'}
-                            </div>
-                            </>
                         )}
                     </div>
-                    <div className="text-center border-r p-1.5" style={{ borderColor: isLight ? '#e2e8f0' : '#334155' }}>
-                        <div className={`text-[11px] font-bold uppercase mb-0.5 ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Trip Selesai</div>
-                        <div className="text-xl font-bold text-emerald-500 flex items-center justify-center gap-1.5"><Repeat className="h-4 w-4" /> 178/180</div>
-                        <div className={`text-[11px] mt-0.5 ${isLight ? 'text-slate-400' : 'text-slate-500'}`}>Performa 98.9%</div>
+                    <div className="text-center border-l p-1.5" style={{ borderColor: isLight ? '#e2e8f0' : '#334155' }}>
+                        <div className={`text-[11px] font-bold uppercase mb-0.5 ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Penumpang Kemarin</div>
+                        <div className={`text-xl font-bold ${isLight ? 'text-slate-900' : 'text-white'}`}>{yesterdayTotal.toLocaleString('id-ID')}</div>
+                        <div className={`text-[11px] mt-0.5 ${isLight ? 'text-slate-400' : 'text-slate-500'}`}>Total Harian</div>
                     </div>
-                    <div className="text-center border-r p-1.5" style={{ borderColor: isLight ? '#e2e8f0' : '#334155' }}>
-                        <div className={`text-[11px] font-bold uppercase mb-0.5 ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Avg. Headway</div>
-                        <div className="text-xl font-bold text-[#F6821F] flex items-center justify-center gap-1.5"><Clock className="h-4 w-4" /> 10<span className="text-sm font-medium">min</span></div>
-                        <div className={`text-[11px] mt-0.5 ${isLight ? 'text-slate-400' : 'text-slate-500'}`}>Sesuai jadwal</div>
-                    </div>
-                    <div className="text-center p-1.5">
-                        <div className={`text-[11px] font-bold uppercase mb-0.5 ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Total Penumpang Bulan Ini</div>
+                    <div className="text-center border-l p-1.5" style={{ borderColor: isLight ? '#e2e8f0' : '#334155' }}>
+                        <div className={`text-[11px] font-bold uppercase mb-0.5 ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Penumpang Bulan Ini</div>
                         {isMonthLoading ? <div className="flex justify-center mt-1"><Loader2 className="h-5 w-5 animate-spin text-red-500" /></div> : (
                             <>
                                 <div className={`text-xl font-bold ${isLight ? 'text-slate-900' : 'text-white'}`}>{monthlyTotalTransactions.toLocaleString('id-ID')}</div>
@@ -1668,6 +1742,39 @@ const LRTJakartaDashboard = () => {
                             </>
                         )}
                     </div>
+                     <div className="text-center border-l border-r p-1.5" style={{ borderColor: isLight ? '#e2e8f0' : '#334155' }}>
+                        <div className={`text-[11px] font-bold uppercase mb-0.5 ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Penumpang Bulan Lalu</div>
+                        {isPrevMonthLoading ? <div className="flex justify-center mt-1"><Loader2 className="h-5 w-5 animate-spin text-red-500" /></div> : (
+                            <>
+                                <div className={`text-xl font-bold ${isLight ? 'text-slate-900' : 'text-white'}`}>{prevMonthTotalTransactions.toLocaleString('id-ID')}</div>
+                                <div className={`text-[11px] mt-0.5 ${isLight ? 'text-slate-400' : 'text-slate-500'}`}>Total Bulanan</div>
+                            </>
+                        )}
+                    </div>
+                    <div className="text-center border-r p-1.5" style={{ borderColor: isLight ? '#e2e8f0' : '#334155' }}>
+                        <div className={`text-[11px] font-bold uppercase mb-0.5 ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>On-Time Performance</div>
+                        {isOtpLoading ? (
+                           <div className="flex justify-center mt-1"><Loader2 className="h-5 w-5 animate-spin text-emerald-500" /></div>
+                        ) : (
+                            <>
+                                {/* --- MODIFICATION START: Using previous month's data --- */}
+                                <div className={`text-xl font-bold flex items-center justify-center gap-1.5 ${prevMonthOtpValue && prevMonthOtpTarget && prevMonthOtpValue >= prevMonthOtpTarget ? 'text-emerald-500' : 'text-amber-500'}`}>
+                                    <CheckCircle className="h-4 w-4" />
+                                    {prevMonthOtpValue !== null ? `${prevMonthOtpValue.toFixed(1)}%` : 'N/A'}
+                                </div>
+                                <div className={`text-[11px] mt-0.5 ${isLight ? 'text-slate-400' : 'text-slate-500'}`}>
+                                    Target: {prevMonthOtpTarget !== null ? `${prevMonthOtpTarget}%` : 'N/A'} (Bln Lalu)
+                                </div>
+                                {/* --- MODIFICATION END --- */}
+                            </>
+                        )}
+                    </div>
+                    <div className="text-center p-1.5">
+                        <div className={`text-[11px] font-bold uppercase mb-0.5 ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Trip Selesai</div>
+                        <div className="text-xl font-bold text-emerald-500 flex items-center justify-center gap-1.5"><Repeat className="h-4 w-4" /> 178/180</div>
+                        <div className={`text-[11px] mt-0.5 ${isLight ? 'text-slate-400' : 'text-slate-500'}`}>Performa 98.9%</div>
+                    </div>
+                    
                 </section>
                 {/* END MODIFIKASI */}
 
@@ -1724,7 +1831,7 @@ const LRTJakartaDashboard = () => {
                             </div>
 
                             {!isTodayLoading && processedStations.length > 0 && (
-                                <div className={`mt-3 pt-2 border-t flex-shrink-0 ${isLight ? 'border-slate-200' : 'border-slate-800'}`}>
+                                <div className={`mt-3 pt-0 border-t flex-shrink-0 ${isLight ? 'border-slate-200' : 'border-slate-800'}`}>
                                     <div className="flex items-center justify-between text-xs mb-1">
                                         <span className={`${isLight ? 'text-slate-500' : 'text-slate-400'} font-semibold`}>Legenda:</span>
                                     </div>
@@ -1760,11 +1867,10 @@ const LRTJakartaDashboard = () => {
 
                         {/* Middle column wrapper: Added lg:col-span-6 */}
                         <div className="col-span-6 flex flex-col gap-2">
-                            {/* ✅ MODIFICATION: Removed fixed height `h-48` to allow content to grow */}
-                            <div className={`rounded-lg p-3 flex flex-col justify-center transition-colors ${isLight ? 'bg-white border border-slate-200 shadow-sm' : 'bg-slate-900 border border-slate-800'}`}>
-                                {/* Container for the two-track simulation */}
+                            {/* --- PERUBAHAN DI SINI: Menambahkan overlay "Coming Soon" transparan --- */}
+                            <div className={`relative rounded-lg p-3 flex flex-col justify-center transition-colors ${isLight ? 'bg-white border border-slate-200 shadow-sm' : 'bg-slate-900 border border-slate-800'} min-h-[260px]`}>
+                                {/* Container for the two-track simulation (visual only) */}
                                 <div className="relative w-full h-24 mt-2">
-
                                     {/* Top Track: PGD -> VLD */}
                                     <div className="absolute top-[calc(50%-20px)] left-0 right-0 h-1 bg-gradient-to-r from-[#D3242B] to-[#F6821F] opacity-50"></div>
                                     <div className={`absolute top-[calc(50%-48px)] left-0 text-xs font-bold ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>PGD → VLD</div>
@@ -1780,43 +1886,24 @@ const LRTJakartaDashboard = () => {
                                             <span className={`absolute left-1/2 -translate-x-1/2 text-xs whitespace-nowrap w-24 text-center ${isLight ? 'text-slate-500' : 'text-slate-400'} ${idx % 2 === 0 ? 'top-full mt-6' : 'bottom-full mb-6'}`}>{name}</span>
                                         </div>
                                     ))}
+                                </div>
+                                
+                                {/* Transparent Overlay */}
+                                <div className={`absolute inset-0 flex flex-col items-center justify-center rounded-lg ${isLight ? 'bg-white/80' : 'bg-slate-950/80'} backdrop-blur-sm`}>
+                                    <Target className={`h-12 w-12 mb-3 ${isLight ? 'text-slate-400' : 'text-slate-600'}`} />
+                                    <h3 className={`text-lg font-bold ${isLight ? 'text-slate-700' : 'text-slate-300'}`}>
+                                        Real-Time Train Location
+                                    </h3>
+                                    <p className={`text-sm ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>
+                                        Fitur ini sedang dalam pengembangan.
+                                    </p>
+                                    <span className={`mt-2 text-xs font-semibold px-2 py-0.5 rounded-full ${isLight ? 'bg-blue-100 text-blue-700' : 'bg-blue-500/20 text-blue-400'}`}>
+                                        COMING SOON
+                                    </span>
+                                </div>
+                            </div>
+                            {/* --- AKHIR PERUBAHAN --- */}
 
-                                    {/* Trains rendered on their respective tracks based on direction */}
-                                    {trainPositions.map(train => (
-                                        <div
-                                            key={train.id}
-                                            className={`absolute transform -translate-x-1/2 -translate-y-1/2 transition-all duration-100`}
-                                            style={{
-                                                left: `${train.position}%`,
-                                                top: train.direction === 1 ? 'calc(50% - 20px)' : 'calc(50% + 20px)'
-                                            }}
-                                        >
-                                            <div className="flex flex-col items-center gap-1">
-                                                <img 
-                                                    src="/kereta (2).png"
-                                                    alt={`Train LRV${train.id}`}
-                                                    className={`w-16 h-auto object-contain transition-transform duration-100 ${train.direction === -1 ? '-scale-x-100' : ''}`}
-                                                />
-                                                <span className={`text-xs font-bold px-1.5 py-0.5 rounded backdrop-blur-sm ${isLight ? 'bg-white/70 text-[#D3242B]' : 'bg-slate-950/70 text-[#F6821F]'}`}>LRV{train.id}</span>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                                {/* ✅ NEW: Footer section for driver and speed info */}
-                                <div className={`mt-3 pt-2 border-t ${isLight ? 'border-slate-100' : 'border-slate-800'}`}>
-                                    <div className="grid grid-cols-3 gap-2 text-center">
-                                        {trainPositions.map(train => (
-                                            <div key={train.id}>
-                                                <div className={`text-xs font-bold px-1.5 py-0.5 rounded-full inline-block mb-1 ${isLight ? 'bg-slate-100 text-[#D3242B]' : 'bg-slate-800 text-[#F6821F]'}`}>
-                                                    LRV{train.id}
-                                                </div>
-                                                <div className={`text-[11px] truncate ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>{train.driver}</div>
-                                                <div className={`text-sm font-bold ${isLight ? 'text-slate-800' : 'text-white'}`}>{train.speed} <span className="text-xs font-normal">km/j</span></div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                               </div>
 
                             <CustomerSatisfactionChart isLight={isLight} />
                         </div>
@@ -1846,7 +1933,8 @@ const LRTJakartaDashboard = () => {
                         <div className={`lg:col-span-2 rounded-lg p-3 transition-colors flex flex-col h-[300px] lg:h-full ${isLight ? 'bg-white border border-slate-200 shadow-sm' : 'bg-slate-900 border border-slate-800'}`}>
                             <h2 className={`text-xs font-bold mb-1 uppercase border-b pb-1 flex-shrink-0 ${isLight ? 'text-[#D3242B] border-slate-200' : 'text-[#F6821F] border-slate-800'}`}>Tren Penumpang Mingguan</h2>
                             <div className="flex-1 min-h-0">
-                                {isWeekLoading ? <div className="flex justify-center items-center h-full"><Loader2 className="h-8 w-8 animate-spin text-red-500" /></div> : (
+                                {/* --- PERUBAHAN DI SINI: Menggunakan updatedWeeklyChartData untuk kondisi loading --- */}
+                                {isWeekLoading && (!updatedWeeklyChartData || updatedWeeklyChartData.length === 0) ? <div className="flex justify-center items-center h-full"><Loader2 className="h-8 w-8 animate-spin text-red-500" /></div> : (
                                     <ResponsiveContainer width="100%" height="100%">
                                         <AreaChart data={updatedWeeklyChartData} margin={{ top: 20, right: 20, left: -10, bottom: 0 }}>
                                             <defs>
@@ -1882,5 +1970,4 @@ const LRTJakartaDashboard = () => {
 };
 
 export default LRTJakartaDashboard;
-
 
