@@ -950,6 +950,18 @@ const CustomerSatisfactionChart = ({ isLight }) => {
         };
     }, [surveyData]);
 
+    // --- PERUBAHAN DI SINI: Logika untuk kelas grid dinamis ---
+    // Dinamis atur grid untuk Pie Chart berdasarkan jumlah data
+    const pieGridClass = React.useMemo(() => {
+        const length = pieData.length;
+        if (length === 3) return 'grid-cols-3';
+        if (length === 4) return 'grid-cols-4';
+        if (length === 2) return 'grid-cols-2';
+        if (length === 1) return 'grid-cols-1';
+        return 'grid-cols-1'; // Default untuk 0 data
+    }, [pieData.length]);
+    // --- AKHIR PERUBAHAN ---
+
     // Tampilan saat loading
     if (isLoading) {
         return (
@@ -996,9 +1008,11 @@ const CustomerSatisfactionChart = ({ isLight }) => {
                 {/* Bagian Kanan: Pie Charts */}
                 <div className="flex flex-col justify-center">
                     <h3 className={`text-sm font-bold text-center mb-4 ${isLight ? 'text-slate-700' : 'text-slate-300'}`}>Capaian Per Triwulan - {currentYear}</h3>
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    {/* --- PERUBAHAN DI SINI: Menggunakan pieGridClass --- */}
+                    <div className={`grid ${pieGridClass} gap-2`}>
                         {pieData.map(d => <PieChartCard key={d.name} data={d} isLight={isLight} />)}
                     </div>
+                    {/* --- AKHIR PERUBAHAN --- */}
                 </div>
             </div>
         </div>
@@ -1319,7 +1333,7 @@ const LatestIssues = ({ isLight }) => {
         { title: 'Minor delay resolved - Stasiun Equestrian', status: 'Resolved', time: '07:30' }
     ];
     return (
-        <div className={` ${isLight ? 'bg-white' : 'bg-slate-900 border border-slate-800'}`}>
+        <div className={` ${isLight ? 'bg-white' : 'bg-slate-900'}`}>
             <h2 className={`text-xs font-bold mb-2 uppercase border-b pb-1 ${isLight ? 'text-[#D3242B] border-slate-200' : 'text-[#F6821F] border-slate-800'}`}>Isu Terakhir</h2>
             <div className="space-y-1.5 flex-1 flex flex-col justify-center">
                 {issues.map((item, idx) => (
@@ -1721,24 +1735,19 @@ const LRTJakartaDashboard = () => {
                     <div className="text-center p-1.5">
                         <div className={`text-[11px] font-bold uppercase mb-0.5 ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Penumpang Hari Ini</div>
                         <div className={`text-xl font-bold ${isLight ? 'text-slate-900' : 'text-white'}`}>{todayTotalTransactions.toLocaleString('id-ID')}</div>
-                        {percentageChange !== null && (
-                            <div className={`text-[11px] font-bold flex items-center justify-center ${percentageChange >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
-                                {percentageChange >= 0 ? <ArrowUp size={12} /> : <ArrowDown size={12} />}
-                                {percentageChange.toFixed(1)}% vs Kemarin
-                            </div>
-                        )}
+                        <div className={`text-[11px] mt-0.5 ${isLight ? 'text-slate-400' : 'text-slate-500'}`}>on going (ex KLG & Qr)</div>
                     </div>
                     <div className="text-center border-l p-1.5" style={{ borderColor: isLight ? '#e2e8f0' : '#334155' }}>
                         <div className={`text-[11px] font-bold uppercase mb-0.5 ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Penumpang Kemarin</div>
                         <div className={`text-xl font-bold ${isLight ? 'text-slate-900' : 'text-white'}`}>{yesterdayTotal.toLocaleString('id-ID')}</div>
-                        <div className={`text-[11px] mt-0.5 ${isLight ? 'text-slate-400' : 'text-slate-500'}`}>Total Harian</div>
+                        <div className={`text-[11px] mt-0.5 ${isLight ? 'text-slate-400' : 'text-slate-500'}`}>Total Harian (ex KLG & Qr)</div>
                     </div>
                     <div className="text-center border-l p-1.5" style={{ borderColor: isLight ? '#e2e8f0' : '#334155' }}>
                         <div className={`text-[11px] font-bold uppercase mb-0.5 ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Penumpang Bulan Ini</div>
                         {isMonthLoading ? <div className="flex justify-center mt-1"><Loader2 className="h-5 w-5 animate-spin text-red-500" /></div> : (
                             <>
                                 <div className={`text-xl font-bold ${isLight ? 'text-slate-900' : 'text-white'}`}>{monthlyTotalTransactions.toLocaleString('id-ID')}</div>
-                                <div className={`text-[11px] mt-0.5 ${isLight ? 'text-slate-400' : 'text-slate-500'}`}>Akumulasi</div>
+                                <div className={`text-[11px] mt-0.5 ${isLight ? 'text-slate-400' : 'text-slate-500'}`}>Akumulasi (ex KLG & Qr)</div>
                             </>
                         )}
                     </div>
@@ -1747,7 +1756,7 @@ const LRTJakartaDashboard = () => {
                         {isPrevMonthLoading ? <div className="flex justify-center mt-1"><Loader2 className="h-5 w-5 animate-spin text-red-500" /></div> : (
                             <>
                                 <div className={`text-xl font-bold ${isLight ? 'text-slate-900' : 'text-white'}`}>{prevMonthTotalTransactions.toLocaleString('id-ID')}</div>
-                                <div className={`text-[11px] mt-0.5 ${isLight ? 'text-slate-400' : 'text-slate-500'}`}>Total Bulanan</div>
+                                <div className={`text-[11px] mt-0.5 ${isLight ? 'text-slate-400' : 'text-slate-500'}`}>Total Bulanan (ex KLG & Qr)</div>
                             </>
                         )}
                     </div>
@@ -1781,17 +1790,20 @@ const LRTJakartaDashboard = () => {
                 {/* Main Content Area */}
                 <main className="flex-1 min-h-0 flex flex-col gap-2">
                     {/* Row 1: Added grid-cols-1 lg:grid-cols-12 */}
-                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-2 flex-1 min-h-0">
+                    <div className="grid grid-cols-1 md:grid-cols-12 gap-2 flex-1 min-h-0">
                         {/* Station Traffic Panel: Added lg:col-span-3 */}
-                        <div className={`lg:col-span-3 rounded-lg p-3 h-full flex flex-col transition-colors ${isLight ? 'bg-white border border-slate-200 shadow-sm' : 'bg-slate-900 border border-slate-800'}`}>
+                        {/* --- RESPONSIVE FIX: Changed lg:col-span-3 to md:col-span-5 lg:col-span-3 --- */}
+                        {/* --- PERUBAHAN DI SINI: Menghapus 'h-full' agar panel menyesuaikan tinggi konten --- */}
+                        <div className={`md:col-span-5 lg:col-span-3 rounded-lg p-3 flex flex-col transition-colors ${isLight ? 'bg-white border border-slate-200 shadow-sm' : 'bg-slate-900 border border-slate-800'}`}>
                             <h2 className={`text-xs font-bold mb-2 uppercase border-b pb-1 flex-shrink-0 ${isLight ? 'text-[#D3242B] border-slate-200' : 'text-[#F6821F] border-slate-800'}`}>
                                 Trafik Stasiun
                             </h2>
 
-                            {/* This internal scroll is fine */}
-                            <div className="overflow-y-auto flex-1">
+                            {/* --- PERUBAHAN DI SINI: Menambahkan flex-1, min-h-0 agar bisa scroll --- */}
+                            <div className="flex-1 overflow-y-auto min-h-0">
                                 {processedStations.length > 0 ? (
-                                    <div className="grid grid-cols-3 gap-2">
+                                    // --- RESPONSIVE FIX: Changed grid-cols-3 to be more adaptive ---
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-2 lg:grid-cols-3 gap-2">
                                         {processedStations.map((station, idx) => (
                                             <div
                                                 key={idx}
@@ -1821,7 +1833,8 @@ const LRTJakartaDashboard = () => {
                                         ))}
                                     </div>
                                 ) : (
-                                    <div className="flex justify-center items-center h-full">
+                                    // --- PERUBAHAN DI SINI: Menghapus 'h-full' dan memberi padding 'py-4' ---
+                                    <div className="flex justify-center items-center py-4">
                                         {isTodayLoading ? 
                                             <Loader2 className="h-6 w-6 animate-spin text-red-500" /> :
                                             <p className={`text-xs ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Tidak ada data trafik.</p>
@@ -1859,14 +1872,15 @@ const LRTJakartaDashboard = () => {
                             )}
                             
                             {/* Tampilkan isu terakhir (statis) */}
-                            <div className={`mt-4 pt-2 border-t ${isLight ? 'border-slate-200' : 'border-slate-800'}`}>
+                                <div className={`mt-4 pt-2 border-t ${isLight ? 'border-slate-200' : 'border-slate-800'}`}>
                                 <LatestIssues isLight={isLight} />
                             </div>
                         </div>
 
 
                         {/* Middle column wrapper: Added lg:col-span-6 */}
-                        <div className="col-span-6 flex flex-col gap-2">
+                        {/* --- RESPONSIVE FIX: Changed lg:col-span-6 to md:col-span-7 lg:col-span-6 --- */}
+                        <div className="md:col-span-7 lg:col-span-6 flex flex-col gap-2">
                             {/* --- PERUBAHAN DI SINI: Menambahkan overlay "Coming Soon" transparan --- */}
                             <div className={`relative rounded-lg p-3 flex flex-col justify-center transition-colors ${isLight ? 'bg-white border border-slate-200 shadow-sm' : 'bg-slate-900 border border-slate-800'} min-h-[260px]`}>
                                 {/* Container for the two-track simulation (visual only) */}
@@ -1910,7 +1924,9 @@ const LRTJakartaDashboard = () => {
 
                         {/* --- PERUBAHAN ANDA DIMULAI DI SINI --- */}
                         {/* Right Sidebar with smaller info cards: Added lg:col-span-3 */}
-                        <div className="lg:col-span-3 flex flex-col gap-2 min-h-0">
+                        {/* --- RESPONSIVE FIX: Changed lg:col-span-3 to md:col-span-12 lg:col-span-3 --- */}
+                        {/* --- PERUBAHAN DI SINI: Menambahkan overflow-y-auto --- */}
+                        <div className="md:col-span-12 lg:col-span-3 flex flex-col gap-2 min-h-0">
                             <SocialSentimentCard isLight={isLight} />
                             <SocialMediaGrowthCard isLight={isLight} />
                             <HotNewsCard isLight={isLight} />
@@ -1970,4 +1986,3 @@ const LRTJakartaDashboard = () => {
 };
 
 export default LRTJakartaDashboard;
-
