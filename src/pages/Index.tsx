@@ -1778,10 +1778,22 @@ const LRTJakartaDashboard = () => {
                             </>
                         )}
                     </div>
-                    <div className="text-center p-1.5">
-                        <div className={`text-[11px] font-bold uppercase mb-0.5 ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Completed Trips</div>
-                        <div className="text-xl font-bold text-emerald-500 flex items-center justify-center gap-1.5"><Repeat className="h-4 w-4" /> 178/180</div>
-                        <div className={`text-[11px] mt-0.5 ${isLight ? 'text-slate-400' : 'text-slate-500'}`}>Performa 98.9%</div>
+                    <div className="text-center p-1.5 relative"> 
+                        <div className="blur-sm">
+                            <div className={`text-[11px] font-bold uppercase mb-0.5 ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Completed Trips</div>
+                            <div className="text-xl font-bold text-emerald-500 flex items-center justify-center gap-1.5"><Repeat className="h-4 w-4" /> 178/180</div>
+                            <div className={`text-[11px] mt-0.5 ${isLight ? 'text-slate-400' : 'text-slate-500'}`}>Performa 98.9%</div>
+                        </div>
+
+                        <div className={`absolute inset-0 flex flex-col items-center justify-center rounded-lg ${isLight ? 'bg-white/80' : 'bg-slate-900/80'} backdrop-blur-sm`}>
+                            <Target className={`h-6 w-6 mb-1 ${isLight ? 'text-slate-400' : 'text-slate-600'}`} />
+                            <h3 className={`text-xs font-bold ${isLight ? 'text-slate-700' : 'text-slate-300'}`}>
+                                Completed Trips
+                            </h3>
+                            <span className={`mt-1 text-xs font-semibold px-2 py-0.5 rounded-full ${isLight ? 'bg-blue-100 text-blue-700' : 'bg-blue-500/20 text-blue-400'}`}>
+                                COMING SOON
+                            </span>
+                        </div>
                     </div>
                     
                 </section>
