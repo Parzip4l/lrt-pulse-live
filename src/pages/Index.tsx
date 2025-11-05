@@ -1327,24 +1327,58 @@ const PassengerInsights = ({ isLight, weeklyData }) => {
 
 // --- NEW COMPONENT: Latest Issues ---
 const LatestIssues = ({ isLight }) => {
-    // ... (Komponen ini tidak berubah) ...
     const issues = [
         { title: 'Maintenance terjadwal di Stasiun Velodrome', status: 'Scheduled', time: '08:00' },
         { title: 'Minor delay resolved - Stasiun Equestrian', status: 'Resolved', time: '07:30' }
     ];
     return (
-        <div className={` ${isLight ? 'bg-white' : 'bg-slate-900'}`}>
-            <h2 className={`text-xs font-bold mb-2 uppercase border-b pb-1 ${isLight ? 'text-[#D3242B] border-slate-200' : 'text-[#F6821F] border-slate-800'}`}>Last Issue</h2>
-            <div className="space-y-1.5 flex-1 flex flex-col justify-center">
+        <div className={`relative rounded-lg p-3 flex-shrink-0 transition-colors h-100 flex flex-col ${isLight ? 'bg-white border border-slate-200 shadow-sm' : 'bg-slate-900 border border-slate-800'}`}>
+            <h2 className={`text-xs font-bold mb-2 uppercase border-b pb-1 flex-shrink-0 ${isLight ? 'text-[#D3242B] border-slate-200' : 'text-[#F6821F] border-slate-800'}`}>
+                Last Issue
+            </h2>
+
+            {/* Konten utama */}
+            <div className="space-y-1.5 flex-1 flex flex-col justify-center blur-sm">
                 {issues.map((item, idx) => (
                     <div key={idx} className={`border-l-4 pl-2 ${item.status === 'Resolved' ? 'border-emerald-500' : 'border-amber-500'}`}>
                         <div className="flex items-center justify-between">
-                            <p className={`text-xs leading-tight ${isLight ? 'text-slate-700' : 'text-slate-300'}`}>{item.title}</p>
-                            <span className={`text-xs px-1.5 py-0.5 rounded-full ${item.status === 'Resolved' ? (isLight ? 'bg-emerald-100 text-emerald-700' : 'bg-emerald-500/10 text-emerald-400') : (isLight ? 'bg-amber-100 text-amber-700' : 'bg-amber-500/10 text-amber-400')}`}>{item.status}</span>
+                            <p className={`text-xs leading-tight ${isLight ? 'text-slate-700' : 'text-slate-300'}`}>
+                                {item.title}
+                            </p>
+                            <span
+                                className={`text-xs px-1.5 py-0.5 rounded-full ${
+                                    item.status === 'Resolved'
+                                        ? (isLight ? 'bg-emerald-100 text-emerald-700' : 'bg-emerald-500/10 text-emerald-400')
+                                        : (isLight ? 'bg-amber-100 text-amber-700' : 'bg-amber-500/10 text-amber-400')
+                                }`}
+                            >
+                                {item.status}
+                            </span>
                         </div>
-                        <p className={`text-xs mt-0.5 ${isLight ? 'text-slate-400' : 'text-slate-500'}`}>{item.time}</p>
+                        <p className={`text-xs mt-0.5 ${isLight ? 'text-slate-400' : 'text-slate-500'}`}>
+                            {item.time}
+                        </p>
                     </div>
                 ))}
+            </div>
+
+            {/* Overlay transparan blur */}
+            <div
+                className={`absolute inset-0 flex flex-col items-center justify-center rounded-lg ${
+                    isLight ? 'bg-white/80' : 'bg-slate-950/80'
+                } backdrop-blur-sm`}
+            >
+                <Target className={`h-10 w-10 mb-2 ${isLight ? 'text-slate-400' : 'text-slate-600'}`} />
+                <h3 className={`text-sm font-bold ${isLight ? 'text-slate-700' : 'text-slate-300'}`}>
+                    Last Issue
+                </h3>
+                <span
+                    className={`mt-1 text-xs font-semibold px-2 py-0.5 rounded-full ${
+                        isLight ? 'bg-blue-100 text-blue-700' : 'bg-blue-500/20 text-blue-400'
+                    }`}
+                >
+                    COMING SOON
+                </span>
             </div>
         </div>
     );
