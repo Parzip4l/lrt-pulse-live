@@ -1766,15 +1766,13 @@ const LRTJakartaDashboard = () => {
                            <div className="flex justify-center mt-1"><Loader2 className="h-5 w-5 animate-spin text-emerald-500" /></div>
                         ) : (
                             <>
-                                {/* --- MODIFICATION START: Using previous month's data --- */}
                                 <div className={`text-xl font-bold flex items-center justify-center gap-1.5 ${prevMonthOtpValue && prevMonthOtpTarget && prevMonthOtpValue >= prevMonthOtpTarget ? 'text-emerald-500' : 'text-amber-500'}`}>
                                     <CheckCircle className="h-4 w-4" />
-                                    {prevMonthOtpValue !== null ? `${prevMonthOtpValue.toFixed(1)}%` : 'N/A'}
+                                    {prevMonthOtpValue !== null ? `${prevMonthOtpValue.toFixed(2)}%` : 'N/A'}
                                 </div>
                                 <div className={`text-[11px] mt-0.5 ${isLight ? 'text-slate-400' : 'text-slate-500'}`}>
                                     Target: {prevMonthOtpTarget !== null ? `${prevMonthOtpTarget}%` : 'N/A'} (Bln Lalu)
                                 </div>
-                                {/* --- MODIFICATION END --- */}
                             </>
                         )}
                     </div>
