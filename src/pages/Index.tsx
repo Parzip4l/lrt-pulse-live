@@ -1771,7 +1771,7 @@ const LRTJakartaDashboard = () => {
                                     {prevMonthOtpValue !== null ? `${prevMonthOtpValue.toFixed(2)}%` : 'N/A'}
                                 </div>
                                 <div className={`text-[11px] mt-0.5 ${isLight ? 'text-slate-400' : 'text-slate-500'}`}>
-                                    Target: {prevMonthOtpTarget !== null ? `${prevMonthOtpTarget}%` : 'N/A'} (Bln Lalu)
+                                    Target: {prevMonthOtpTarget !== null ? `${prevMonthOtpTarget.toFixed(2)}%` : 'N/A'} (Bln Lalu)
                                 </div>
                             </>
                         )}
