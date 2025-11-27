@@ -1080,8 +1080,6 @@ const TrainMonitoringSlider = ({ isLight }) => {
         const trainIds = ['22', '19']; 
         
         try {
-            // Uncomment baris ini untuk production environment:
-            
             const requests = trainIds.map(id => 
                 fetch(`http://160.19.224.229/api/monitoring/summary?train_id=${id}`)
                 .then(res => res.json())
@@ -2157,7 +2155,6 @@ const LRTJakartaDashboard = () => {
                                 <TrainMonitoringSlider isLight={isLight} />
                             </div>
                         </div>
-                        {/* --- PERUBAHAN ANDA BERAKHIR DI SINI --- */}
                     </div>
 
                     {/* Bottom Section - Tata letak ini sudah benar */}
