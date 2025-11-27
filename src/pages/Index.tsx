@@ -3,7 +3,7 @@ import {
     Train, AlertTriangle, Clock, Users, Sun, Moon, WifiOff, ArrowUp, ArrowDown,
     CheckCircle, Repeat, Hash, Smile, TrendingUp, Star, Sunrise, Sunset,
     PieChart as PieChartIcon, Target, CalendarDays, BrainCircuit, Instagram,
-    Facebook, Twitter, Youtube, Linkedin
+    Facebook, Twitter, Youtube, Linkedin, Wifi, Cpu, Thermometer, TrainFront, Droplets, Activity, Zap
 } from 'lucide-react';
 import {
     LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -668,7 +668,7 @@ const SocialSentimentCard = ({ isLight }) => {
 
             {/* Transparent Overlay */}
             <div className={`absolute inset-0 flex flex-col items-center justify-center rounded-lg ${isLight ? 'bg-white/80' : 'bg-slate-950/80'} backdrop-blur-sm`}>
-                <Target className={`h-10 w-10 mb-2 ${isLight ? 'text-slate-400' : 'text-slate-600'}`} />
+                <Target className={`h-5 w-5 mb-2 ${isLight ? 'text-slate-400' : 'text-slate-600'}`} />
                 <h3 className={`text-sm font-bold ${isLight ? 'text-slate-700' : 'text-slate-300'}`}>
                     Sentimen Media Sosial
                 </h3>
@@ -841,9 +841,7 @@ const useSocialMediaData = () => {
             { platform: 'instagram', growth_percentage: 12.5 },
             { platform: 'facebook', growth_percentage: 3.2 },
             { platform: 'twitter', growth_percentage: -1.1 },
-            { platform: 'tiktok', growth_percentage: 22.8 },
-            { platform: 'youtube', growth_percentage: 8.5 },
-            { platform: 'linkedin', growth_percentage: 5.0 },
+            
         ];
         setSocialData(dummySocial);
     }, []);
@@ -1066,6 +1064,182 @@ const ClosingRateChart = ({ isLight }) => {
                     </div>
                     ))}
                 </div>
+            </div>
+        </div>
+    );
+};
+
+const TrainMonitoringSlider = ({ isLight }) => {
+    const [trains, setTrains] = useState([]);
+    const [currentIndex, setCurrentIndex] = useState(0);
+    const [loading, setLoading] = useState(true);
+
+    // 1. Fetch Data Logic
+    const fetchData = async () => {
+        // IDs yang diminta
+        const trainIds = ['22', '19']; 
+        
+        try {
+            // Uncomment baris ini untuk production environment:
+            
+            const requests = trainIds.map(id => 
+                fetch(`http://160.19.224.229/api/monitoring/summary?train_id=${id}`)
+                .then(res => res.json())
+            );
+            const responses = await Promise.all(requests);
+            setTrains(responses);
+            
+
+            // --- MOCK DATA (Hanya untuk Preview di sini karena IP lokal tidak bisa diakses) ---
+            // Ini mensimulasikan format JSON yang Anda berikan
+            // const mockData = [
+            //     {
+            //         "train_id": "22",
+            //         "summary": { "temperature": "25", "humidity": "81.5", "noise": "36.5", "devices": 2, "alerts": 0, "connectivity": 85 }
+            //     },
+            //     {
+            //         "train_id": "19",
+            //         "summary": { "temperature": "23.5", "humidity": "78.2", "noise": "42.0", "devices": 2, "alerts": 3, "connectivity": 45 }
+            //     }
+            // ];
+            // setTrains(mockData);
+            setLoading(false);
+            // --------------------------------------------------------------------------
+
+        } catch (error) {
+            console.error("Error fetching train data:", error);
+            setLoading(false);
+        }
+    };
+
+    // Initial Fetch
+    useEffect(() => {
+        fetchData();
+        // Opsional: Polling data setiap 30 detik agar realtime
+        const dataInterval = setInterval(fetchData, 30000);
+        return () => clearInterval(dataInterval);
+    }, []);
+
+    // 2. Slider Logic (10 Detik)
+    useEffect(() => {
+        if (trains.length <= 1) return;
+
+        const sliderInterval = setInterval(() => {
+            setCurrentIndex((prevIndex) => (prevIndex + 1) % trains.length);
+        }, 10000);
+
+        return () => clearInterval(sliderInterval);
+    }, [trains]);
+
+    // Helper untuk warna konektivitas
+    const getConnColor = (val) => {
+        if (val >= 80) return 'text-emerald-500';
+        if (val >= 50) return 'text-yellow-500';
+        return 'text-red-500';
+    };
+
+    if (loading) return <div className="p-4 text-xs text-center animate-pulse">Loading Train Data...</div>;
+    if (trains.length === 0) return null;
+
+    const currentTrain = trains[currentIndex];
+    const { summary } = currentTrain;
+
+    const labelTrain = (id) => {
+        const map = {
+            "22": "LRV - 7",
+            "19": "LRV - 4"
+        };
+
+        return map[id] ?? `TS-${id}`;
+    };
+
+    const displayId = labelTrain(currentTrain.train_id);
+
+    return (
+        <div className={`rounded-lg p-3 shadow-sm transition-all duration-500 relative overflow-hidden flex flex-col justify-between ${isLight ? 'bg-white border border-slate-200' : 'bg-slate-900 border border-slate-800'}`}>
+            
+            {/* Header Card */}
+            <div className="flex justify-between items-center border-b pb-2 mb-2 border-dashed border-slate-700/50">
+                <h2 className={`text-xs font-bold uppercase flex items-center gap-2 ${isLight ? 'text-[#D3242B]' : 'text-[#F6821F]'}`}>
+                    <TrainFront size={14} />
+                    Train Sensor Monitoring | {labelTrain(currentTrain.train_id)}
+                </h2>
+            </div>
+
+            {/* Grid Content */}
+            <div className="grid grid-cols-2 gap-3 mb-2">
+                {/* Temperature */}
+                <div className="flex items-center gap-2">
+                    <div className={`p-1.5 rounded-md ${isLight ? 'bg-blue-50 text-blue-500' : 'bg-slate-800 text-blue-400'}`}>
+                        <Thermometer size={14} />
+                    </div>
+                    <div className="flex flex-col">
+                        <span className={`text-sm font-bold leading-none ${isLight ? 'text-slate-700' : 'text-slate-200'}`}>{summary.temperature}°C</span>
+                        <span className="text-[9px] text-slate-500 uppercase">Temp</span>
+                    </div>
+                </div>
+
+                {/* Humidity */}
+                <div className="flex items-center gap-2">
+                    <div className={`p-1.5 rounded-md ${isLight ? 'bg-cyan-50 text-cyan-500' : 'bg-slate-800 text-cyan-400'}`}>
+                        <Droplets size={14} />
+                    </div>
+                    <div className="flex flex-col">
+                        <span className={`text-sm font-bold leading-none ${isLight ? 'text-slate-700' : 'text-slate-200'}`}>{summary.humidity}%</span>
+                        <span className="text-[9px] text-slate-500 uppercase">Humid</span>
+                    </div>
+                </div>
+
+                {/* Noise */}
+                <div className="flex items-center gap-2">
+                    <div className={`p-1.5 rounded-md ${isLight ? 'bg-purple-50 text-purple-500' : 'bg-slate-800 text-purple-400'}`}>
+                        <Activity size={14} />
+                    </div>
+                    <div className="flex flex-col">
+                        <span className={`text-sm font-bold leading-none ${isLight ? 'text-slate-700' : 'text-slate-200'}`}>{summary.noise} dB</span>
+                        <span className="text-[9px] text-slate-500 uppercase">Noise</span>
+                    </div>
+                </div>
+
+                {/* Connectivity */}
+                <div className="flex items-center gap-2">
+                    <div className={`p-1.5 rounded-md ${isLight ? 'bg-slate-100' : 'bg-slate-800'} ${getConnColor(summary.connectivity)}`}>
+                        <Wifi size={14} />
+                    </div>
+                    <div className="flex flex-col w-full pr-2">
+                        <span className={`text-sm font-bold leading-none ${getConnColor(summary.connectivity)}`}>{summary.connectivity}%</span>
+                        <div className="w-full bg-slate-200 dark:bg-slate-700 h-0.5 mt-1 rounded-full">
+                            <div className={`h-full rounded-full ${summary.connectivity >= 80 ? 'bg-emerald-500' : summary.connectivity >= 50 ? 'bg-yellow-500' : 'bg-red-500'}`} style={{ width: `${summary.connectivity}%` }}></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* Bottom Status Row */}
+            <div className={`mt-auto pt-2 border-t ${isLight ? 'border-slate-100' : 'border-slate-800'} flex justify-between`}>
+                 <div className="flex items-center gap-1.5">
+                    <Cpu size={12} className="text-slate-400"/>
+                    <span className={`text-[10px] ${isLight ? 'text-slate-600' : 'text-slate-400'}`}>
+                        Devices: <b className={isLight ? 'text-slate-800' : 'text-white'}>{summary.devices}</b>
+                    </span>
+                 </div>
+
+                 <div className={`flex items-center gap-1.5 px-2 py-0.5 rounded ${summary.alerts > 0 ? 'bg-red-500/10 text-red-500' : 'bg-emerald-500/10 text-emerald-500'}`}>
+                    <AlertTriangle size={12} />
+                    <span className="text-[10px] font-bold">
+                        {summary.alerts} Alerts
+                    </span>
+                 </div>
+            </div>
+
+            {/* Progress Dots / Slider Indicators */}
+            <div className="absolute top-3 right-3 flex gap-1">
+                {trains.map((_, idx) => (
+                    <div 
+                        key={idx}
+                        className={`h-1 rounded-full transition-all duration-300 ${idx === currentIndex ? 'w-4 bg-[#F6821F]' : 'w-1 bg-slate-600'}`}
+                    />
+                ))}
             </div>
         </div>
     );
@@ -1458,7 +1632,7 @@ const HotNewsCard = ({ isLight }) => {
 
             {/* Transparent Overlay */}
             <div className={`absolute inset-0 flex flex-col items-center justify-center rounded-lg ${isLight ? 'bg-white/80' : 'bg-slate-950/80'} backdrop-blur-sm`}>
-                <Target className={`h-10 w-10 mb-2 ${isLight ? 'text-slate-400' : 'text-slate-600'}`} />
+                <Target className={`h-5 w-5 mb-2 ${isLight ? 'text-slate-400' : 'text-slate-600'}`} />
                 <h3 className={`text-sm font-bold ${isLight ? 'text-slate-700' : 'text-slate-300'}`}>
                     Hot News
                 </h3>
@@ -1479,13 +1653,9 @@ const SocialMediaGrowthCard = ({ isLight }) => {
     const socialIcons = {
         instagram: <Instagram className="w-5 h-5 text-[#E1306C]" />,
         facebook: <Facebook className="w-5 h-5 text-[#1877F2]" />,
-        twitter: <Twitter className="w-5 h-5 text-[#1DA1F2]" />,
-        tiktok: <Hash className="w-5 h-5" style={{color: isLight ? 'black' : 'white'}} />, // Lucide doesn't have TikTok, using Hash
-        youtube: <Youtube className="w-5 h-5 text-[#FF0000]" />,
-        linkedin: <Linkedin className="w-5 h-5 text-[#0A66C2]" />,
     };
 
-    const platformOrder = ['instagram', 'facebook', 'twitter', 'tiktok', 'youtube', 'linkedin'];
+    const platformOrder = ['instagram', 'facebook'];
 
     const renderContent = () => {
         if (isLoading) {
@@ -1505,7 +1675,7 @@ const SocialMediaGrowthCard = ({ isLight }) => {
         );
 
         return (
-            <div className="grid grid-cols-3 gap-x-2 gap-y-3 pt-2">
+            <div className="grid grid-cols-4 gap-x-2 gap-y-3 pt-0">
                 {sortedData.map(social => {
                     const growth = social.growth_percentage;
                     const color = growth > 0 ? 'text-emerald-500' : growth < 0 ? 'text-red-500' : (isLight ? 'text-slate-500' : 'text-slate-400');
@@ -1513,7 +1683,7 @@ const SocialMediaGrowthCard = ({ isLight }) => {
                     return (
                         <div key={social.platform} className="flex flex-col items-center text-center">
                             {socialIcons[social.platform]}
-                            <span className={`text-[11px] font-bold capitalize mt-0.5 ${isLight ? 'text-slate-600' : 'text-slate-300'}`}>{social.platform}</span>
+                            <span className={`text-[8px] font-bold capitalize mt-0.5 ${isLight ? 'text-slate-600' : 'text-slate-300'}`}>{social.platform}</span>
                             <span className={`text-xs font-bold flex items-center ${color}`}>
                                 {Icon && <Icon className="w-3 h-3" />}
                                 {growth.toFixed(1)}%
@@ -1534,7 +1704,7 @@ const SocialMediaGrowthCard = ({ isLight }) => {
 
              {/* Transparent Overlay */}
              <div className={`absolute inset-0 flex flex-col items-center justify-center rounded-lg ${isLight ? 'bg-white/80' : 'bg-slate-950/80'} backdrop-blur-sm`}>
-                <Target className={`h-10 w-10 mb-2 ${isLight ? 'text-slate-400' : 'text-slate-600'}`} />
+                <Target className={`h-5 w-5 mb-2 ${isLight ? 'text-slate-400' : 'text-slate-600'}`} />
                 <h3 className={`text-sm font-bold text-center ${isLight ? 'text-slate-700' : 'text-slate-300'}`}>
                     Social Media Growth
                 </h3>
@@ -1983,6 +2153,9 @@ const LRTJakartaDashboard = () => {
                             />
                             
                             <ClosingRateChart isLight={isLight} />
+                            <div className="h-[170px]">
+                                <TrainMonitoringSlider isLight={isLight} />
+                            </div>
                         </div>
                         {/* --- PERUBAHAN ANDA BERAKHIR DI SINI --- */}
                     </div>
