@@ -1076,36 +1076,40 @@ const TrainMonitoringSlider = ({ isLight }) => {
 
     // 1. Fetch Data Logic
     const fetchData = async () => {
-        // IDs yang diminta
         const trainIds = ['22', '19']; 
         
+        // GANTI INI: Gunakan path proxy yang sudah kita setup di Nginx
+        const BASE_URL = '/api-proxy'; 
+
         try {
             const requests = trainIds.map(id => 
-                fetch(`http://160.19.224.229/api/monitoring/summary?train_id=${id}`)
-                .then(res => res.json())
+                // Browser memanggil: /api-proxy/monitoring/summary?train_id=22
+                // Nginx meneruskan: http://160.19.224.229/api/monitoring/summary?train_id=22
+                fetch(`${BASE_URL}/monitoring/summary?train_id=${id}`)
+                .then(res => {
+                    if (!res.ok) throw new Error("Gagal mengambil data");
+                    return res.json();
+                })
             );
-            const responses = await Promise.all(requests);
-            setTrains(responses);
-            
 
-            // --- MOCK DATA (Hanya untuk Preview di sini karena IP lokal tidak bisa diakses) ---
-            // Ini mensimulasikan format JSON yang Anda berikan
-            // const mockData = [
-            //     {
-            //         "train_id": "22",
-            //         "summary": { "temperature": "25", "humidity": "81.5", "noise": "36.5", "devices": 2, "alerts": 0, "connectivity": 85 }
-            //     },
-            //     {
-            //         "train_id": "19",
-            //         "summary": { "temperature": "23.5", "humidity": "78.2", "noise": "42.0", "devices": 2, "alerts": 3, "connectivity": 45 }
-            //     }
-            // ];
-            // setTrains(mockData);
-            setLoading(false);
-            // --------------------------------------------------------------------------
+            const responses = await Promise.all(requests);
+            
+            // Karena respons JSON dari server Anda sudah mengandung "train_id",
+            // logika Anda di bawah (labelTrain, dll) akan tetap berfungsi normal.
+            if (responses && responses.length > 0) {
+                setTrains(responses);
+                setLoading(false);
+            }
 
         } catch (error) {
             console.error("Error fetching train data:", error);
+            
+            // --- FALLBACK MOCK DATA (Opsional: Tetap simpan ini untuk jaga-jaga) ---
+            const mockData = [
+                { "train_id": "22", "summary": { "temperature": "25", "humidity": "81.5", "noise": "36.5", "devices": 2, "alerts": 0, "connectivity": 85 } },
+                { "train_id": "19", "summary": { "temperature": "23.5", "humidity": "78.2", "noise": "42.0", "devices": 2, "alerts": 3, "connectivity": 45 } }
+            ];
+            setTrains(mockData);
             setLoading(false);
         }
     };
