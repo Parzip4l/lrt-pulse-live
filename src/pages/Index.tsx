@@ -39,10 +39,49 @@ interface SocialGrowth {
     growth_percentage: number;
 }
 
+// --- WebSocket Interfaces ---
+interface LrvData {
+    id: number;
+    lng: number;
+    lat: number;
+    time: string;
+}
+
+interface TableData {
+    kereta_id: string;
+    no_ka: string;
+    masinis: string;
+    kecepatan: string;
+}
+
+interface WebSocketMessage {
+    user_id: number;
+    type: string;
+    message: {
+        lrv: LrvData;
+        table: TableData;
+    };
+}
+
+interface ActiveTrain {
+    id: number;
+    lat: number;
+    lng: number;
+    no_ka: string;
+    masinis: string;
+    kecepatan: number;
+    last_update: number;
+    direction: 'down' | 'up'; // 'down'=PGD->VLD, 'up'=VLD->PGD
+}
+
 // --- Utility & Constants ---
 const STATION_NAMES = {
-    PEG: 'PGD', BOU: 'BU', BOS: 'BS',
-    PUL: 'PLA', EQS: 'EQS', VEL: 'VLD',
+    PEG: 'PGD', PGD: 'PGD',
+    BOU: 'BU',  BU: 'BU',
+    BOS: 'BS',  BS: 'BS',
+    PUL: 'PLA', PLA: 'PLA',
+    EQS: 'EQS',
+    VEL: 'VLD', VLD: 'VLD'
 };
 
 const formatDate = (date) => {
@@ -75,11 +114,10 @@ const timeAgo = (dateString: string): string => {
     return "Baru saja";
 };
 
-// --- Custom Hook for Data Fetching (FIXED VERSION) ---
+// --- Custom Hook for Data Fetching ---
 const useTrafficData = (options) => {
     const { defaultRange, refreshInterval } = options;
 
-    // --- CACHE LOGIC START ---
     const getTodayCacheKey = () => `traffic-data-today-${formatDate(new Date())}`;
 
     const loadInitialState = () => {
@@ -92,7 +130,6 @@ const useTrafficData = (options) => {
                 if (cachedItem) {
                     const { data, timestamp } = JSON.parse(cachedItem);
                     const cacheAge = Date.now() - timestamp;
-                    // Cache valid for 2 minutes to show something initially
                     if (cacheAge < 2 * 60 * 1000) { 
                         return { ...defaultState, isLoading: false, stationSummary: data.stationSummary, totalTransactions: data.totalTransactions, percentageChange: data.percentageChange, peakHours: data.peakHours, yesterdayTotal: data.yesterdayTotal || 0 };
                     }
@@ -126,7 +163,6 @@ const useTrafficData = (options) => {
     };
 
     const initialState = loadInitialState();
-    // --- CACHE LOGIC END ---
 
     const [startDate, setStartDate] = useState(() => {
         const date = new Date();
@@ -144,11 +180,9 @@ const useTrafficData = (options) => {
         return new Date();
     });
 
-    // --- FIX: TOKEN REF MECHANISM ---
     const [token, setToken] = useState<string | null>(null);
-    const tokenRef = useRef<string | null>(null); // Ref untuk menyimpan token terbaru
+    const tokenRef = useRef<string | null>(null);
 
-    // Sync Ref dengan State Token
     useEffect(() => {
         tokenRef.current = token;
     }, [token]);
@@ -165,7 +199,6 @@ const useTrafficData = (options) => {
 
     const performLogin = useCallback(async () => {
         try {
-            // FIX: Gunakan path relatif agar request melewati proxy Nginx (HTTPS -> HTTP)
             const response = await fetch("/api/index.php/login/doLogin", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -193,12 +226,11 @@ const useTrafficData = (options) => {
 
     const fetchTrafficData = useCallback(async (start, end, currentToken) => {
         try {
-            // FIX: Gunakan path relatif agar request melewati proxy Nginx (HTTPS -> HTTP)
             const response = await fetch("/api/index.php/transaction/list_gate_out_prepaid_trx", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
-                    "Authorization": `Bearer ${currentToken}` // Gunakan token yang dipass
+                    "Authorization": `Bearer ${currentToken}`
                 },
                 body: JSON.stringify({
                     rqid: "456QWsad123QefasTY",
@@ -216,7 +248,6 @@ const useTrafficData = (options) => {
             if (!response.ok) throw new Error(`API error: ${response.status}`);
             const result = await response.json();
 
-            // Cek jika server mengembalikan error terkait token
             if (result.msg && (result.msg.includes("Token") || result.msg.includes("Unauthorized"))) {
                 throw new Error("Token Expired/Invalid");
             }
@@ -234,11 +265,7 @@ const useTrafficData = (options) => {
 
         const fetchData = async (isInitialLoad = false) => {
             if (!isMounted) return;
-            // NOTE: Kita tidak meng-set Error menjadi null di awal fetch agar indikator error tidak berkedip
-            // jika fetch berikutnya sukses, baru error akan hilang otomatis jika kita set di akhir sukses.
-            // Namun untuk logika 'persistent data', kita biarkan error tertangkap tapi data lama tetap ada.
 
-            // --- Caching Logic (Month/Week) ---
             if (defaultRange === 'month' || defaultRange === 'previous-month') { 
                 const cacheKey = `traffic-data-${formatDate(startDate).substring(0, 7)}`;
                 try {
@@ -277,21 +304,17 @@ const useTrafficData = (options) => {
             if (defaultRange === 'today') setPercentageChange(null);
 
             try {
-                // --- FIX: Gunakan Token dari Ref ---
                 let currentToken = tokenRef.current;
                 
-                // Jika token kosong, login dulu
                 if (!currentToken) {
                     try {
                         currentToken = await performLogin();
                         if (isMounted) {
-                            setToken(currentToken); // Update State
-                            tokenRef.current = currentToken; // Update Ref segera
-                            setError(null); // Clear error jika login sukses
+                            setToken(currentToken);
+                            tokenRef.current = currentToken;
+                            setError(null);
                         }
                     } catch (loginErr) {
-                        // Jika login gagal, throw error agar masuk catch bawah
-                        // Tapi JANGAN return, biarkan error tertangkap supaya UI tau status offline
                         throw loginErr;
                     }
                 }
@@ -306,7 +329,6 @@ const useTrafficData = (options) => {
 
                 if (!mainData || !isMounted) return;
 
-                // Jika sampai sini, data sukses diambil
                 setError(null); 
 
                 const dailyTotals = {};
@@ -314,7 +336,7 @@ const useTrafficData = (options) => {
                 const yesterdaySummary = {};
                 const now = new Date();
 
-                mainData.rows.forEach(row => {
+                (mainData.rows || []).forEach(row => {
                     const day = row.gate_out_on_dtm.substring(0, 10);
                     const station = row.station_code_var;
                     if (!dailyTotals[day]) dailyTotals[day] = { total: 0 };
@@ -323,11 +345,10 @@ const useTrafficData = (options) => {
                     summary[station].total++;
                 });
 
-                // Peak Hours
                 let currentPeakHours = null;
                 if (defaultRange === 'today') {
                     const hourlyCounts = Array(24).fill(0);
-                    mainData.rows.forEach(row => {
+                    (mainData.rows || []).forEach(row => {
                         try {
                             const hour = new Date(row.gate_out_on_dtm).getHours();
                             if (!isNaN(hour)) hourlyCounts[hour]++;
@@ -347,15 +368,14 @@ const useTrafficData = (options) => {
                     } else if (isMounted) setPeakHours(null);
                 }
 
-                // Yesterday Processing
                 let yesterdayFullTotal = 0;
                 if (yesterdayData) {
                     yesterdayFullTotal = yesterdayData.total;
                     if (isMounted) setYesterdayTotal(yesterdayFullTotal);
 
                     const yesterdayRowsUntilNow = (defaultRange === 'today')
-                        ? yesterdayData.rows.filter(row => new Date(row.gate_out_on_dtm) <= now)
-                        : yesterdayData.rows;
+                        ? (yesterdayData.rows || []).filter(row => new Date(row.gate_out_on_dtm) <= now)
+                        : (yesterdayData.rows || []);
 
                     yesterdayRowsUntilNow.forEach(row => {
                         const station = row.station_code_var;
@@ -374,7 +394,6 @@ const useTrafficData = (options) => {
                     });
                 }
 
-                // Week Chart Logic
                 let chartDataResult: ChartData[] = [];
                 if (defaultRange === 'week') {
                     const diffDays = Math.max(1, Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 3600 * 24)) + 1);
@@ -396,10 +415,9 @@ const useTrafficData = (options) => {
                     setTotalTransactions(mainData.total);
                 }
 
-                // Percentage Change
                 let currentPercentageChange = null;
                 if (defaultRange === 'today' && yesterdayData) {
-                    const yesterdayTotalUntilNow = yesterdayData.rows.filter(row => new Date(row.gate_out_on_dtm) <= now).length;
+                    const yesterdayTotalUntilNow = (yesterdayData.rows || []).filter(row => new Date(row.gate_out_on_dtm) <= now).length;
                     const todayTotal = mainData.total;
                     if (yesterdayTotalUntilNow > 0) {
                         currentPercentageChange = ((todayTotal - yesterdayTotalUntilNow) / yesterdayTotalUntilNow) * 100;
@@ -410,7 +428,6 @@ const useTrafficData = (options) => {
                     }
                 }
 
-                // --- CACHE SAVING ---
                 if (defaultRange === 'month' || defaultRange === 'previous-month') {
                     const cacheKey = `traffic-data-${formatDate(startDate).substring(0, 7)}`;
                     try { localStorage.setItem(cacheKey, JSON.stringify({ total: mainData.total, timestamp: Date.now() })); } catch(e) {}
@@ -439,9 +456,7 @@ const useTrafficData = (options) => {
 
             } catch (err) {
                 if (isMounted && err instanceof Error) {
-                    setError(err.message); // Set error, tapi data lama TIDAK di-wipe
-                    
-                    // --- FIX: Reset Token jika error unauthorized ---
+                    setError(err.message); 
                     if (err.message.includes("Token") || err.message.includes("401") || err.message.includes("Unauthorized")) {
                         setToken(null);
                         tokenRef.current = null;
@@ -464,12 +479,11 @@ const useTrafficData = (options) => {
 
         return () => { isMounted = false; };
     }, [startDate, endDate, performLogin, fetchTrafficData, defaultRange, refreshInterval]); 
-    // Dependency 'token' dihapus dari useEffect utama agar tidak trigger infinite loop
 
     return { isLoading, error, chartData, stationSummary, totalTransactions, percentageChange, peakHours, yesterdayTotal };
 };
 
-// --- Social Media Sentiment Component ---
+// --- Components ---
 const SocialSentimentCard = ({ isLight }) => {
     const sentimentData = { positive: 1250, neutral: 800, negative: 150 };
     const totalMentions = sentimentData.positive + sentimentData.neutral + sentimentData.negative;
@@ -502,7 +516,6 @@ const SocialSentimentCard = ({ isLight }) => {
     );
 };
 
-// --- Custom Hook for Survey Data ---
 const useSurveyData = () => {
     const [surveyData, setSurveyData] = useState<SurveyData[]>([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -532,7 +545,6 @@ const useSurveyData = () => {
     return { surveyData, isLoading, error };
 };
 
-// --- Custom Hook for Performance Data ---
 const usePerformanceData = (type: 'OTP' | 'SPM') => {
     const [data, setData] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -541,8 +553,6 @@ const usePerformanceData = (type: 'OTP' | 'SPM') => {
     useEffect(() => {
         let isMounted = true;
         const fetchPerformanceData = async () => {
-            // NOTE: Jangan set error null di sini jika ingin persistent data
-            // setError(null); 
             try {
                 const VITE_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlzcm51ZWlmdGRoYXdpb2Z1dnh6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjA2OTIzMDEsImV4cCI6MjA3NjI2ODMwMX0.v8qIGTwvOcJ9cLw1GBzcw0g95nSyGVe-n5ISPc-yCFg";
                 const response = await fetch(`https://ysrnueiftdhawiofuvxz.supabase.co/functions/v1/metrics-api/api/metrics?type=${type}`, {
@@ -565,7 +575,7 @@ const usePerformanceData = (type: 'OTP' | 'SPM') => {
                         }))
                         .sort((a, b) => a.monthIndex - b.monthIndex);
                     setData(processedData);
-                    setError(null); // Clear error only on success
+                    setError(null); 
                 }
             } catch (err) {
                 if (isMounted) setError(err instanceof Error ? err.message : 'Unknown error');
@@ -580,7 +590,6 @@ const usePerformanceData = (type: 'OTP' | 'SPM') => {
     return { data, isLoading, error };
 };
 
-// --- Custom Hooks for News & Social ---
 const useNewsData = () => {
     const [newsData, setNewsData] = useState<NewsItem[]>([]);
     useEffect(() => {
@@ -607,7 +616,6 @@ const useSocialMediaData = () => {
     return { socialData, isLoading: false, error: null };
 };
 
-// --- Components ---
 const PieChartCard = ({ data, isLight }) => {
     const chartData = [{ name: 'Capaian', value: data.value }, { name: 'Sisa', value: 100 - data.value }];
     const colors = ['#d3242b', isLight ? '#e5e7eb' : '#374151'];
@@ -660,7 +668,6 @@ const CustomerSatisfactionChart = ({ isLight }) => {
     }, [pieData.length]);
 
     if (isLoading) return <div className={`flex-1 rounded-lg p-3 flex items-center justify-center transition-colors ${isLight ? 'bg-white border border-slate-200 shadow-sm' : 'bg-slate-900 border border-slate-800'}`}><Loader2 className={`h-8 w-8 animate-spin ${isLight ? 'text-[#D3242B]' : 'text-[#F6821F]'}`} /></div>;
-    // NOTE: Removed Error View, will show empty or old data
     
     return (
         <div className={`flex-1 rounded-lg p-3 flex flex-col transition-colors ${isLight ? 'bg-white border border-slate-200 shadow-sm' : 'bg-slate-900 border border-slate-800'}`}>
@@ -939,6 +946,276 @@ const RealtimeHoursInfo = ({ isLight, peakHours }) => {
     );
 };
 
+// --- REALTIME TRAIN TRACKER COMPONENT (WebSocket) ---
+
+// Daftar Koordinat Stasiun (Urut PGD -> VLD / Arah Selatan)
+const STATIONS_ORDER_DOWN = [
+    { code: 'PGD', lat: -6.156952069555118, name: 'Pegangsaan Dua' },
+    { code: 'BU',  lat: -6.159079450966208, name: 'Boulevard Utara' },
+    { code: 'BS',  lat: -6.168944754902876, name: 'Boulevard Selatan' },
+    { code: 'PLA', lat: -6.177093050483244, name: 'Pulomas' },
+    { code: 'EQS', lat: -6.183657907397494, name: 'Equestrian' },
+    { code: 'VLD', lat: -6.192364124448333, name: 'Velodrome' }
+];
+
+// Daftar Koordinat Stasiun (Urut VLD -> PGD / Arah Utara) - Reverse dari Down
+const STATIONS_ORDER_UP = [...STATIONS_ORDER_DOWN].reverse();
+
+// Helper hitung % posisi di track visual
+const getTrainProgress = (currentLat: number, stations: typeof STATIONS_ORDER_DOWN) => {
+    // Toleransi deteksi ujung track
+    const buffer = 0.002; 
+    const startLat = stations[0].lat;
+    const endLat = stations[stations.length - 1].lat;
+    
+    // Cek apakah ini jalur PGD->VLD (Lat makin kecil/negatif bertambah) atau VLD->PGD (Lat makin besar)
+    const isMovingSouth = startLat > endLat; 
+
+    // 1. Handle Out of Bounds (Depot/Overrun)
+    if (isMovingSouth) {
+        if (currentLat > startLat + buffer) return 0;   // Sebelum PGD
+        if (currentLat < endLat - buffer) return 100;   // Lewat VLD
+    } else {
+        if (currentLat < startLat - buffer) return 0;   // Sebelum VLD
+        if (currentLat > endLat + buffer) return 100;   // Lewat PGD
+    }
+
+    // 2. Hitung Progress per Segmen Stasiun
+    // Kita bagi UI menjadi 5 segmen rata (0-20, 20-40, 40-60, 60-80, 80-100)
+    const segmentSize = 100 / (stations.length - 1);
+
+    for (let i = 0; i < stations.length - 1; i++) {
+        const segStart = stations[i];
+        const segEnd = stations[i + 1];
+
+        // Cek apakah latitude kereta berada di antara stasiun ini
+        let inSegment = false;
+        if (isMovingSouth) {
+            inSegment = currentLat <= segStart.lat && currentLat >= segEnd.lat;
+        } else {
+            inSegment = currentLat >= segStart.lat && currentLat <= segEnd.lat;
+        }
+
+        if (inSegment) {
+            // Hitung persentase presisi dalam segmen ini
+            const totalLatDiff = Math.abs(segEnd.lat - segStart.lat);
+            const trainLatDiff = Math.abs(currentLat - segStart.lat);
+            const segProgress = trainLatDiff / totalLatDiff; // 0.0 - 1.0
+
+            return (i * segmentSize) + (segProgress * segmentSize);
+        }
+    }
+    
+    return 0; // Default
+};
+
+const RealTimeTrainTracker = ({ isLight }) => {
+    const [trains, setTrains] = useState<Record<number, ActiveTrain>>({});
+    const [status, setStatus] = useState<'CONNECTING' | 'CONNECTED' | 'DISCONNECTED'>('CONNECTING');
+    const wsRef = useRef<WebSocket | null>(null);
+
+    // --- WebSocket Connection ---
+    useEffect(() => {
+        const connectWebSocket = () => {
+            const ws = new WebSocket('wss://websocket.lrtjakarta.co.id/');
+            wsRef.current = ws;
+
+            ws.onopen = () => setStatus('CONNECTED');
+            ws.onclose = () => {
+                setStatus('DISCONNECTED');
+                setTimeout(connectWebSocket, 5000); 
+            };
+            ws.onerror = () => ws.close();
+
+            ws.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    if (data.type === 'chat' && data.message?.lrv && data.message?.table) {
+                        const { lrv, table } = data.message;
+                        const newLat = lrv.lat;
+                        
+                        setTrains(prev => {
+                            const existing = prev[lrv.id];
+                            let newDirection: 'down' | 'up' = existing?.direction || 'down';
+                            let cleanSpeed = parseFloat(table.kecepatan || "0");
+
+                            // LOGIKA DETEKSI DIAM / BERHENTI DI STASIUN
+                            // Jika perubahan koordinat sangat kecil, nol-kan kecepatan
+                            if (existing) {
+                                const deltaLat = Math.abs(newLat - existing.lat);
+                                const deltaLng = Math.abs(lrv.lng - existing.lng);
+                                // Ambang batas toleransi (0.00001 derajat ~ 1.1 meter)
+                                if (deltaLat < 0.00001 && deltaLng < 0.00001) {
+                                    cleanSpeed = 0;
+                                }
+
+                                // Logika Direction (Deteksi arah gerak)
+                                const diff = newLat - existing.lat;
+                                // Jika Lat berkurang signifikan, berarti ke Selatan (Down)
+                                if (diff < -0.000005) newDirection = 'down'; 
+                                // Jika Lat bertambah signifikan, berarti ke Utara (Up)
+                                else if (diff > 0.000005) newDirection = 'up'; 
+                            } else {
+                                // Inisialisasi awal: jika lebih dekat VLD (-6.19), anggap arah Up (pulang ke PGD)
+                                if (newLat < -6.18) newDirection = 'up';
+                            }
+
+                            return {
+                                ...prev,
+                                [lrv.id]: {
+                                    id: lrv.id,
+                                    lat: lrv.lat,
+                                    lng: lrv.lng,
+                                    no_ka: table.no_ka,
+                                    masinis: table.masinis,
+                                    kecepatan: cleanSpeed,
+                                    last_update: Date.now(),
+                                    direction: newDirection
+                                }
+                            };
+                        });
+                    }
+                } catch (err) { console.error(err); }
+            };
+        };
+
+        connectWebSocket();
+
+        // Cleanup Data Lama (> 1 menit tidak update)
+        const cleanupInterval = setInterval(() => {
+            const now = Date.now();
+            setTrains(prev => {
+                const newState = { ...prev };
+                let hasChanges = false;
+                Object.keys(newState).forEach(key => {
+                    if (now - newState[key].last_update > 60000) { 
+                        delete newState[key];
+                        hasChanges = true;
+                    }
+                });
+                return hasChanges ? newState : prev;
+            });
+        }, 5000);
+
+        return () => {
+            if (wsRef.current) wsRef.current.close();
+            clearInterval(cleanupInterval);
+        };
+    }, []);
+
+    const trainList = Object.values(trains);
+
+    // --- Sub-Component Render Satu Track ---
+    const TrackRenderer = ({ title, stations, directionFilter, stationOrder, colorClass }) => {
+        // Ambil kereta yang sesuai arah jalur ini
+        const activeTrainsOnTrack = trainList.filter(t => t.direction === directionFilter);
+
+        return (
+            <div className="mb-8 relative last:mb-2">
+                 {/* Judul Jalur */}
+                <div className={`text-[10px] font-bold uppercase mb-5 pl-1 flex items-center gap-2 ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${colorClass}`}></span>
+                    {title}
+                </div>
+
+                <div className="relative w-full h-8">
+                    {/* Garis Track Visual */}
+                    <div className="absolute top-1/2 -translate-y-1/2 left-0 right-0 h-1.5 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
+                         {/* Gradient background track */}
+                         <div className={`w-full h-full bg-current opacity-20 ${colorClass.replace('bg-', 'text-')}`}></div>
+                    </div>
+
+                    {/* Titik Stasiun */}
+                    {stations.map((s, idx) => {
+                        const leftPos = (idx / (stations.length - 1)) * 100;
+                        return (
+                            <div key={s.code} className="absolute top-1/2 -translate-y-1/2 z-10" style={{ left: `${leftPos}%` }}>
+                                <div className={`w-2.5 h-2.5 rounded-full border-2 -translate-x-1/2 bg-white ${isLight ? 'border-slate-400' : 'border-slate-600'}`}></div>
+                                <span className={`absolute left-1/2 -translate-x-1/2 -top-4 text-[9px] font-bold whitespace-nowrap ${isLight ? 'text-slate-400' : 'text-slate-500'}`}>
+                                    {s.code}
+                                </span>
+                            </div>
+                        );
+                    })}
+
+                    {/* Kereta Bergerak */}
+                    {activeTrainsOnTrack.map((train) => {
+                        const progress = getTrainProgress(train.lat, stationOrder);
+                        
+                        return (
+                            <div 
+                                key={train.id}
+                                className="absolute top-1/2 -translate-y-1/2 z-20 transition-all duration-1000 ease-linear"
+                                style={{ left: `${progress}%` }}
+                            >
+                                <div className="relative -translate-x-1/2 flex flex-col items-center group">
+                                    {/* Icon Kereta */}
+                                    <div className={`p-1 rounded-full shadow-md border z-20 ${train.kecepatan > 0 ? `${colorClass} border-white animate-pulse` : 'bg-slate-600 border-slate-400'} text-white`}>
+                                        <TrainFront size={14} />
+                                    </div>
+                                    
+                                    {/* Info Card (Compact & Always Visible) */}
+                                    <div className={`absolute top-6 min-w-[90px] px-2 py-1.5 rounded border shadow-sm flex flex-col items-center text-center backdrop-blur-sm z-30 ${isLight ? 'bg-white/95 border-slate-300' : 'bg-slate-800/95 border-slate-600'}`}>
+                                         {/* Arrow Card */}
+                                         <div className={`absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 rotate-45 border-l border-t ${isLight ? 'bg-white border-slate-300' : 'bg-slate-800 border-slate-600'}`}></div>
+                                         
+                                         <span className={`text-[9px] font-extrabold leading-none mb-0.5 ${isLight ? 'text-slate-800' : 'text-white'}`}>KA {train.no_ka}</span>
+                                         <span className={`text-[8px] leading-tight mb-1 ${isLight ? 'text-slate-600' : 'text-slate-300'} truncate max-w-[100px]`}>{train.masinis}</span>
+                                         <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded-full ${train.kecepatan > 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-500'}`}>
+                                            {train.kecepatan} km/h
+                                         </span>
+                                    </div>
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+            </div>
+        );
+    };
+
+    return (
+        <>
+            <div className={`relative rounded-lg p-4 flex flex-col justify-center transition-colors ${isLight ? 'bg-white border border-slate-200 shadow-sm' : 'bg-slate-900 border border-slate-800'} min-h-[280px]`}>
+                {/* Header Card */}
+                <div className="flex justify-between items-center mb-4 border-b border-dashed border-slate-200 dark:border-slate-700 pb-2">
+                     <div className="flex items-center gap-2">
+                        <Target className={`w-4 h-4 ${isLight ? 'text-slate-400' : 'text-slate-500'}`} />
+                        <h3 className={`text-xs font-bold uppercase ${isLight ? 'text-slate-700' : 'text-slate-300'}`}>Real-Time Train Monitoring</h3>
+                     </div>
+                     <div className="flex items-center gap-1.5">
+                        <span className={`w-1.5 h-1.5 rounded-full ${status === 'CONNECTED' ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'}`}></span>
+                        <span className={`text-[9px] font-bold uppercase ${isLight ? 'text-slate-400' : 'text-slate-500'}`}>{status === 'CONNECTED' ? 'Live Data' : 'Offline'}</span>
+                     </div>
+                </div>
+
+                <div className="flex-1 flex flex-col justify-center py-1">
+                    {/* JALUR 1: PGD -> VLD (Merah) */}
+                    <TrackRenderer 
+                        title="Jalur 1: Pegangsaan Dua → Velodrome" 
+                        stations={STATIONS_ORDER_DOWN} 
+                        directionFilter="down" 
+                        stationOrder={STATIONS_ORDER_DOWN}
+                        colorClass="bg-[#D3242B]"
+                    />
+
+                    {/* JALUR 2: VLD -> PGD (Oranye) */}
+                    <TrackRenderer 
+                        title="Jalur 2: Velodrome → Pegangsaan Dua" 
+                        stations={STATIONS_ORDER_UP} 
+                        directionFilter="up"
+                        stationOrder={STATIONS_ORDER_UP}
+                        colorClass="bg-[#F6821F]"
+                    />
+                </div>
+            </div>
+
+            {/* CUSTOMER SATISFACTION CHART (Tetap Ada) */}
+            <CustomerSatisfactionChart isLight={isLight} />
+        </>
+    );
+};
+
 // --- Main Dashboard Component ---
 const LRTJakartaDashboard = () => {
     const [currentTime, setCurrentTime] = useState(new Date());
@@ -980,13 +1257,14 @@ const LRTJakartaDashboard = () => {
     const toggleTheme = () => { setTheme(currentTheme => (currentTheme === 'light' ? 'dark' : 'light')); };
     const isLight = theme === 'light';
 
-    const processedStations = Object.entries(stationSummary).map(([code, summary]) => {
+    // FIX: Station Traffic Data Processing
+    // Perbaikan ini memastikan 'stationSummary' valid dan menangani kemungkinan kunci stasiun yang tidak terdefinisi
+    const processedStations = Object.entries(stationSummary || {}).map(([code, summary]) => {
         let status = 'Low'; if (summary.total > 4000) status = 'High'; else if (summary.total > 1500) status = 'Medium';
-        return { name: STATION_NAMES[code] || code, traffic: summary.total, status: status, change: summary.change || null };
+        // Pastikan ada fallback jika STATION_NAMES[code] undefined
+        const name = STATION_NAMES[code] || code || 'Unknown';
+        return { name: name, traffic: summary.total, status: status, change: summary.change || null };
     }).sort((a, b) => b.traffic - a.traffic);
-
-    // KITA HAPUS BLOK ERROR BLOCKING DI SINI
-    // if (error) return ...
 
     return (
         <>
@@ -998,7 +1276,6 @@ const LRTJakartaDashboard = () => {
                         <div><h1 className="text-xl font-bold tracking-wide text-white">LRT JAKARTA DASHBOARD</h1><p className="text-xs font-semibold text-white/80">Pegangsaan Dua - Velodrome Line | Real-Time Monitoring System</p></div>
                     </div>
                     <div className="flex items-center gap-4 mt-3 md:mt-0">
-                        {/* Indikator Error Kecil di Header */}
                         {todayError && (
                             <div className="bg-red-500 text-white px-2 py-1 rounded text-[8px] font-bold flex items-center gap-1 animate-pulse">
                                 <WifiOff size={12}/> Reconnecting To Server
@@ -1051,22 +1328,8 @@ const LRTJakartaDashboard = () => {
                         </div>
 
                         <div className="md:col-span-7 lg:col-span-6 flex flex-col gap-2">
-                            <div className={`relative rounded-lg p-3 flex flex-col justify-center transition-colors ${isLight ? 'bg-white border border-slate-200 shadow-sm' : 'bg-slate-900 border border-slate-800'} min-h-[260px]`}>
-                                <div className="relative w-full h-24 mt-2">
-                                    <div className="absolute top-[calc(50%-20px)] left-0 right-0 h-1 bg-gradient-to-r from-[#D3242B] to-[#F6821F] opacity-50"></div>
-                                    <div className={`absolute top-[calc(50%-48px)] left-0 text-xs font-bold ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>PGD → VLD</div>
-                                    <div className="absolute top-[calc(50%+20px)] left-0 right-0 h-1 bg-gradient-to-r from-[#F6821F] to-[#D3242B] opacity-50"></div>
-                                    <div className={`absolute top-[calc(50%+36px)] right-0 text-xs font-bold ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>VLD → PGD</div>
-                                    {Object.values(STATION_NAMES).map((name, idx, arr) => (
-                                        <div key={idx} className="absolute top-1/2 -translate-y-1/2" style={{ left: `${(idx / (arr.length - 1)) * 100}%` }}>
-                                            <div className="w-4 h-4 rounded-full border-2 -translate-x-1/2" style={{ backgroundColor: '#F6821F', borderColor: '#D3242B' }}></div>
-                                            <span className={`absolute left-1/2 -translate-x-1/2 text-xs whitespace-nowrap w-24 text-center ${isLight ? 'text-slate-500' : 'text-slate-400'} ${idx % 2 === 0 ? 'top-full mt-6' : 'bottom-full mb-6'}`}>{name}</span>
-                                        </div>
-                                    ))}
-                                </div>
-                                <div className={`absolute inset-0 flex flex-col items-center justify-center rounded-lg ${isLight ? 'bg-white/80' : 'bg-slate-950/80'} backdrop-blur-sm`}><Target className={`h-12 w-12 mb-3 ${isLight ? 'text-slate-400' : 'text-slate-600'}`} /><h3 className={`text-lg font-bold ${isLight ? 'text-slate-700' : 'text-slate-300'}`}>Real-Time Train Location</h3><p className={`text-sm ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Fitur ini sedang dalam pengembangan.</p><span className={`mt-2 text-xs font-semibold px-2 py-0.5 rounded-full ${isLight ? 'bg-blue-100 text-blue-700' : 'bg-blue-500/20 text-blue-400'}`}>COMING SOON</span></div>
-                            </div>
-                            <CustomerSatisfactionChart isLight={isLight} />
+                            {/* --- INTEGRASI WEBSOCKET COMPONENT --- */}
+                            <RealTimeTrainTracker isLight={isLight} />
                         </div>
 
                         <div className="md:col-span-12 lg:col-span-3 flex flex-col gap-2 min-h-0">
