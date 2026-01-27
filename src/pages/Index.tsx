@@ -669,9 +669,13 @@ const CustomerSatisfactionChart = ({ isLight }) => {
 
     if (isLoading) return <div className={`flex-1 rounded-lg p-3 flex items-center justify-center transition-colors ${isLight ? 'bg-white border border-slate-200 shadow-sm' : 'bg-slate-900 border border-slate-800'}`}><Loader2 className={`h-8 w-8 animate-spin ${isLight ? 'text-[#D3242B]' : 'text-[#F6821F]'}`} /></div>;
     
+    const totalScore = pieData.reduce((acc, curr) => acc + (curr.value || 0), 0);
+    const averageScore = pieData.length > 0 ? (totalScore / pieData.length).toFixed(1) : 0;
+
     return (
         <div className={`flex-1 rounded-lg p-3 flex flex-col transition-colors ${isLight ? 'bg-white border border-slate-200 shadow-sm' : 'bg-slate-900 border border-slate-800'}`}>
             <div className={`flex-1 grid grid-cols-1 md:grid-cols-2 gap-4 mt-2`}>
+                {/* --- LEFT COLUMN (Line Chart) --- */}
                 <div className="flex flex-col">
                     <h3 className={`text-sm font-bold text-center mb-2 ${isLight ? 'text-slate-700' : 'text-slate-300'}`}>Annual Satisfaction Record</h3>
                     <div className="flex-1">
@@ -688,9 +692,29 @@ const CustomerSatisfactionChart = ({ isLight }) => {
                         </ResponsiveContainer>
                     </div>
                 </div>
+
+                {/* --- RIGHT COLUMN (Quarterly Pie Charts + Average) --- */}
                 <div className="flex flex-col justify-center">
                     <h3 className={`text-sm font-bold text-center mb-4 ${isLight ? 'text-slate-700' : 'text-slate-300'}`}>Quarterly Achievement - {currentYear}</h3>
-                    <div className={`grid ${pieGridClass} gap-2`}>{pieData.map(d => <PieChartCard key={d.name} data={d} isLight={isLight} />)}</div>
+                    
+                    {/* Grid Chart */}
+                    <div className={`grid ${pieGridClass} gap-2`}>
+                        {pieData.map(d => <PieChartCard key={d.name} data={d} isLight={isLight} />)}
+                    </div>
+
+                    {/* --- BAGIAN BARU: RATA-RATA --- */}
+                    <div className={`mt-4 flex flex-col items-center justify-center p-3 rounded-lg border ${isLight ? 'bg-slate-50 border-slate-200' : 'bg-slate-800/50 border-slate-700'}`}>
+                        <span className={`text-xs font-medium uppercase ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>
+                            Rata-rata Q1 - Q4
+                        </span>
+                        <div className="flex items-baseline gap-1 mt-1">
+                            <span className={`text-2xl font-bold ${isLight ? 'text-slate-700' : 'text-slate-200'}`}>
+                                {averageScore}%
+                            </span>
+                            {/* Opsional: Indikator kecil jika diperlukan */}
+                            <span className="text-xs text-slate-500">achievement</span>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
