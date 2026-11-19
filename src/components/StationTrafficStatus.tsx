@@ -51,7 +51,7 @@ export const StationTrafficStatus = () => {
 
   const performLogin = useCallback(async (): Promise<string> => {
       console.log("Attempting to log in...");
-      const response = await fetch("http://36.92.28.99/lrt_jakpro_api/index.php/login/doLogin", {
+      const response = await fetch("/api/index.php/login/doLogin", {
           method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ rqid: "456QWsad123QefasTY", username: "202020", password: "de88f321991be4f8e56a27aba3adc2aa", type: "web" })
       });
@@ -66,7 +66,7 @@ export const StationTrafficStatus = () => {
 
   const fetchTrafficData = useCallback(async (start: string, end: string, currentToken: string): Promise<TrafficApiResponse['data'] | null> => {
       try {
-        const response = await fetch("http://36.92.28.99/lrt_jakpro_api/index.php/transaction/list_gate_out_prepaid_trx", {
+        const response = await fetch("/api/index.php/transaction/list_gate_out_prepaid_trx", {
             method: "POST", headers: { "Content-Type": "application/json", "Authorization": `Bearer ${currentToken}` },
             body: JSON.stringify({
                 rqid: "456QWsad123QefasTY", order: "DESC", start_date: start, end_date: end,

@@ -8,6 +8,13 @@ export default defineConfig(({ mode }) => ({
   server: {
     host: "::",
     port: 8080,
+    proxy: {
+      "/api/index.php": {
+        target: "http://10.214.91.58",
+        changeOrigin: true,
+        rewrite: (url) => url.replace(/^\/api\/index\.php/, "/lrt_jakpro_api/index.php"),
+      },
+    },
   },
   plugins: [react(), mode === "development" && componentTagger()].filter(Boolean),
   resolve: {
