@@ -19,6 +19,10 @@ RUN npm run build
 # Tahap 2: Siapkan server Nginx untuk menyajikan file statis
 FROM nginx:1.27-alpine AS runner
 
+# Server-side login service, without additional npm dependencies.
+RUN apk add --no-cache nodejs
+COPY server/ /app/server/
+
 # Salin hasil build dari tahap 'builder' ke direktori default Nginx
 COPY --from=builder /app/dist /usr/share/nginx/html
 
@@ -29,5 +33,5 @@ COPY nginx/nginx.conf /etc/nginx/conf.d/default.conf
 # Ekspos port 80
 EXPOSE 4023
 
-# Perintah default untuk menjalankan Nginx saat container dimulai
-CMD ["nginx", "-g", "daemon off;"]
+# Jalankan layanan penumpang dan Nginx dalam container yang sama
+CMD ["node", "/app/server/start.mjs"]

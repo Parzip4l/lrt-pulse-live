@@ -1,3 +1,4 @@
+import { requestTrafficData } from "@/lib/traffic";
 import { useEffect, useState, useCallback, memo, useRef } from "react";
 import { ComposedChart, Bar, Line, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis, Legend } from "recharts";
 
@@ -8,14 +9,13 @@ const Loader2 = ({ className }: { className?: string }) => (<svg xmlns="http://w
 const formatDate = (date: Date): string => date.toISOString().split("T")[0];
 interface TrafficData { station_code_var: string; gate_out_on_dtm: string; }
 interface TrafficApiResponse { code: number; data?: { rows: TrafficData[]; total: number; }; message?: string; }
-interface LoginApiResponse { code: number; message: string; data?: { token: string; }; }
 interface ChartData { name: string; [stationCode: string]: number | string; }
 
 // --- Main Chart Component ---
 export const VisitorsChart = () => {
     const [chartData, setChartData] = useState<ChartData[]>([]);
     const [stationKeys, setStationKeys] = useState<string[]>([]);
-    const [token, setToken] = useState<string | null>(null);
+
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
@@ -27,34 +27,7 @@ export const VisitorsChart = () => {
         return date;
     });
 
-    const performLogin = useCallback(async (): Promise<string> => {
-        const response = await fetch("/api/index.php/login/doLogin", {
-            method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ rqid: "456QWsad123QefasTY", username: "202020", password: "de88f321991be4f8e56a27aba3adc2aa", type: "web" })
-        });
-        if (!response.ok) throw new Error(`Login failed: ${response.status}`);
-        const result: LoginApiResponse = await response.json();
-        if (result.code === 0 && result.data?.token) return result.data.token;
-        throw new Error(result.message || "Login failed: No token returned.");
-    }, []);
-
-    const fetchTrafficData = useCallback(async (start: string, end: string, currentToken: string): Promise<TrafficApiResponse['data']> => {
-        const response = await fetch("/api/index.php/transaction/list_gate_out_prepaid_trx", {
-            method: "POST", headers: { "Content-Type": "application/json", "Authorization": `Bearer ${currentToken}` },
-            body: JSON.stringify({
-                rqid: "456QWsad123QefasTY", order: "DESC", start_date: start, end_date: end,
-                rows: "100000", // Increased row limit for larger date ranges
-                sort: "gate_out_on_dtm", page: "1", card_type: "", status_trx: "", card_number: "",
-                station_code: "", terminal_in: "", terminal_out: "", concession_type: ""
-            })
-        });
-        const contentType = response.headers.get("content-type");
-        if (!response.ok || !contentType?.includes("application/json")) throw new Error("Token may have expired.");
-        const result: TrafficApiResponse = await response.json();
-        if (result.code === 0 && result.data) return result.data;
-        if (result.code !== 0 && result.message?.includes("Success list")) return { rows: [], total: 0 };
-        throw new Error(result.message || `API Error: Code ${result.code}`);
-    }, []);
+    const fetchTrafficData = useCallback((start: string, end: string) => requestTrafficData(start, end, ""), []);
 
     useEffect(() => {
         let isMounted = true;
@@ -65,14 +38,7 @@ export const VisitorsChart = () => {
             setError(null);
             
             try {
-                let currentToken = token;
-                if (!currentToken) {
-                    currentToken = await performLogin();
-                    if (isMounted) setToken(currentToken);
-                    else return;
-                }
-
-                const data = await fetchTrafficData(formatDate(startDate), formatDate(endDate), currentToken);
+                const data = await fetchTrafficData(formatDate(startDate), formatDate(endDate));
                 
                 if (data && isMounted) {
                     const dailyTotals: { [day: string]: { [station: string]: number } } = {};
@@ -102,7 +68,6 @@ export const VisitorsChart = () => {
             } catch (err) {
                 if (isMounted && err instanceof Error) {
                     setError(err.message);
-                    if (err.message.includes("Token")) setToken(null);
                 }
             } finally {
                 if (isMounted) setIsLoading(false);
@@ -112,7 +77,7 @@ export const VisitorsChart = () => {
         fetchData();
 
         return () => { isMounted = false; };
-    }, [token, startDate, endDate, performLogin, fetchTrafficData]);
+    }, [startDate, endDate, fetchTrafficData]);
 
     const stationTotals = stationKeys.reduce((acc, station) => {
         acc[station] = chartData.reduce((sum, day) => sum + (day[station] as number), 0);

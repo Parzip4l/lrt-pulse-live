@@ -1,3 +1,4 @@
+import { requestTrafficData } from "@/lib/traffic";
 import { useEffect, useState, useRef, useCallback, memo } from "react";
 
 // --- SVG Icons (No changes needed here) ---
@@ -11,7 +12,6 @@ const ArrowDown = ({ className }: { className?: string }) => (<svg xmlns="http:/
 const formatDate = (date: Date): string => date.toISOString().split("T")[0];
 interface TrafficData { station_code_var: string; card_type_var: string; }
 interface TrafficApiResponse { code: number; data?: { rows: TrafficData[]; total: number; }; message?: string; }
-interface LoginApiResponse { code: number; message: string; data?: { token: string; }; }
 interface StationSummary { [stationCode: string]: { total: number; breakdown: { [cardType: string]: number }; }; }
 
 // --- Memoized Child Component for Optimization ---
@@ -43,51 +43,13 @@ export const StationTrafficStatus = () => {
   const [summary, setSummary] = useState<StationSummary>({});
   const [totalTransactions, setTotalTransactions] = useState(0);
   const [percentageChange, setPercentageChange] = useState<number | null>(null);
-  const [token, setToken] = useState<string | null>(null);
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [startDate, setStartDate] = useState(formatDate(new Date()));
   const [endDate, setEndDate] = useState(formatDate(new Date()));
 
-  const performLogin = useCallback(async (): Promise<string> => {
-      console.log("Attempting to log in...");
-      const response = await fetch("/api/index.php/login/doLogin", {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ rqid: "456QWsad123QefasTY", username: "202020", password: "de88f321991be4f8e56a27aba3adc2aa", type: "web" })
-      });
-      if (!response.ok) throw new Error(`Login failed: ${response.status}`);
-      const result: LoginApiResponse = await response.json();
-      if (result.code === 0 && result.data?.token) {
-          console.log("Login successful.");
-          return result.data.token;
-      }
-      throw new Error(result.message || "Login failed: No token returned.");
-  }, []);
-
-  const fetchTrafficData = useCallback(async (start: string, end: string, currentToken: string): Promise<TrafficApiResponse['data'] | null> => {
-      try {
-        const response = await fetch("/api/index.php/transaction/list_gate_out_prepaid_trx", {
-            method: "POST", headers: { "Content-Type": "application/json", "Authorization": `Bearer ${currentToken}` },
-            body: JSON.stringify({
-                rqid: "456QWsad123QefasTY", order: "DESC", start_date: start, end_date: end,
-                rows: "100000", sort: "gate_out_on_dtm", page: "1", card_type: "", status_trx: "", card_number: "",
-                station_code: "", terminal_in: "", terminal_out: "", concession_type: ""
-            })
-        });
-        const contentType = response.headers.get("content-type");
-        if (!response.ok || !contentType?.includes("application/json")) {
-            throw new Error("Token may have expired.");
-        }
-        const result: TrafficApiResponse = await response.json();
-        if (result.code === 0 && result.data) return result.data;
-        // Handle cases where API returns success but no data (e.g., for past dates)
-        if (result.code !== 0 && result.message?.includes("Success list")) return { rows: [], total: 0 };
-        throw new Error(result.message || `API Error: Code ${result.code}`);
-      } catch (error) {
-          console.error(`Failed to fetch data for ${start}-${end}:`, error);
-          throw error; // Re-throw to be caught by the main logic
-      }
-  }, []);
+  const fetchTrafficData = useCallback((start: string, end: string) => requestTrafficData(start, end, ""), []);
 
   const summarizeData = (rows: TrafficData[]): StationSummary => {
       return rows.reduce((acc, { station_code_var: station, card_type_var: card }) => {
@@ -107,19 +69,13 @@ export const StationTrafficStatus = () => {
         setPercentageChange(null);
         
         try {
-            let currentToken = token;
-            if (!currentToken) {
-                currentToken = await performLogin();
-                if (!isMounted) setToken(currentToken);
-            }
-
             // OPTIMIZATION: Run API calls concurrently
-            const promises = [fetchTrafficData(startDate, endDate, currentToken)];
+            const promises = [fetchTrafficData(startDate, endDate)];
             const isToday = startDate === endDate && startDate === formatDate(new Date());
             if (isToday) {
                 const yesterday = new Date();
                 yesterday.setDate(yesterday.getDate() - 1);
-                promises.push(fetchTrafficData(formatDate(yesterday), formatDate(yesterday), currentToken));
+                promises.push(fetchTrafficData(formatDate(yesterday), formatDate(yesterday)));
             }
 
             const [mainData, yesterdayData] = await Promise.all(promises);
@@ -145,7 +101,6 @@ export const StationTrafficStatus = () => {
             if (isMounted && err instanceof Error) {
                 console.error("Fetch cycle error:", err.message);
                 setError(err.message);
-                if (err.message.includes("Token")) setToken(null); // Trigger re-login on next attempt
             }
         } finally {
             if (isMounted) setLoading(false);
@@ -153,7 +108,7 @@ export const StationTrafficStatus = () => {
     };
     fetchData();
     return () => { isMounted = false; };
-  }, [startDate, endDate, token, performLogin, fetchTrafficData]);
+  }, [startDate, endDate, fetchTrafficData]);
 
   return (
     <div className="bg-gray-100 rounded-lg p-6 font-sans min-h-[400px] col-span-full lg:col-span-4">

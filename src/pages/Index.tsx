@@ -1,3 +1,4 @@
+import { requestTrafficData } from "@/lib/traffic";
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
     Train, AlertTriangle, Clock, Users, Sun, Moon, WifiOff, ArrowUp, ArrowDown,
@@ -17,7 +18,6 @@ const Loader2 = ({ className }) => (<svg xmlns="http://www.w3.org/2000/svg" widt
 interface TrafficData { station_code_var: string; gate_out_on_dtm: string; }
 interface ApiResponse<T> { sts: string; data?: T; msg?: string; }
 interface TrafficApiResponseData { rows: TrafficData[]; total: number; }
-interface LoginApiResponseData { token: string; }
 interface StationSummary { [stationCode: string]: { total: number; change?: number }; }
 interface ChartData { name: string; passengers: number; date: Date; }
 interface SurveyData {
@@ -180,13 +180,6 @@ const useTrafficData = (options) => {
         return new Date();
     });
 
-    const [token, setToken] = useState<string | null>(null);
-    const tokenRef = useRef<string | null>(null);
-
-    useEffect(() => {
-        tokenRef.current = token;
-    }, [token]);
-
     const [isLoading, setIsLoading] = useState(initialState.isLoading); 
     const [error, setError] = useState<string | null>(null);
 
@@ -197,68 +190,7 @@ const useTrafficData = (options) => {
     const [peakHours, setPeakHours] = useState<{ busiest: number, quietest: number } | null>(initialState.peakHours);
     const [yesterdayTotal, setYesterdayTotal] = useState(initialState.yesterdayTotal);
 
-    const performLogin = useCallback(async () => {
-        try {
-            const response = await fetch("/api/index.php/login/doLogin", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    rqid: "456QWsad123QefasTY",
-                    username: "202020",
-                    password: "de88f321991be4f8e56a27aba3adc2aa",
-                    type: "web"
-                })
-            });
-
-            if (!response.ok) throw new Error(`Login failed: ${response.status}`);
-            const result = await response.json();
-
-            if (result.code === 0 || result.sts === "S") {
-                const newToken = result.data?.token || result.token || result.data?.access_token;
-                if (newToken) return newToken;
-            }
-            throw new Error(result.message || "Login failed: No token");
-        } catch (err) {
-            console.error('Login error:', err);
-            throw err;
-        }
-    }, []);
-
-    const fetchTrafficData = useCallback(async (start, end, currentToken) => {
-        try {
-            const response = await fetch("/api/index.php/transaction/list_gate_out_prepaid_trx", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    "Authorization": `Bearer ${currentToken}`
-                },
-                body: JSON.stringify({
-                    rqid: "456QWsad123QefasTY",
-                    order: "DESC",
-                    start_date: start,
-                    end_date: end,
-                    rows: "100000",
-                    sort: "gate_out_on_dtm",
-                    page: "1",
-                    status_trx: "S",
-                    card_number: "", station_code: "", terminal_in: "", terminal_out: "", card_type: ""
-                })
-            });
-
-            if (!response.ok) throw new Error(`API error: ${response.status}`);
-            const result = await response.json();
-
-            if (result.msg && (result.msg.includes("Token") || result.msg.includes("Unauthorized"))) {
-                throw new Error("Token Expired/Invalid");
-            }
-
-            if ((result.code === 0 || result.sts === "S") && result.data) return result.data;
-            if (result.msg?.includes("Success")) return { rows: [], total: 0 };
-            throw new Error(result.message || result.msg || `API Error: code ${result.code}`);
-        } catch (err) {
-            throw err;
-        }
-    }, []);
+    const fetchTrafficData = useCallback((start: string, end: string) => requestTrafficData(start, end), []);
 
     useEffect(() => {
         let isMounted = true;
@@ -304,27 +236,12 @@ const useTrafficData = (options) => {
             if (defaultRange === 'today') setPercentageChange(null);
 
             try {
-                let currentToken = tokenRef.current;
-                
-                if (!currentToken) {
-                    try {
-                        currentToken = await performLogin();
-                        if (isMounted) {
-                            setToken(currentToken);
-                            tokenRef.current = currentToken;
-                            setError(null);
-                        }
-                    } catch (loginErr) {
-                        throw loginErr;
-                    }
-                }
-
                 const yesterday = new Date();
                 yesterday.setDate(yesterday.getDate() - 1);
 
                 const [mainData, yesterdayData] = await Promise.all([
-                    fetchTrafficData(formatDate(startDate), formatDate(endDate), currentToken),
-                    (defaultRange === 'today' || defaultRange === 'week') ? fetchTrafficData(formatDate(yesterday), formatDate(yesterday), currentToken) : Promise.resolve(null)
+                    fetchTrafficData(formatDate(startDate), formatDate(endDate)),
+                    (defaultRange === 'today' || defaultRange === 'week') ? fetchTrafficData(formatDate(yesterday), formatDate(yesterday)) : Promise.resolve(null)
                 ]);
 
                 if (!mainData || !isMounted) return;
@@ -457,10 +374,6 @@ const useTrafficData = (options) => {
             } catch (err) {
                 if (isMounted && err instanceof Error) {
                     setError(err.message); 
-                    if (err.message.includes("Token") || err.message.includes("401") || err.message.includes("Unauthorized")) {
-                        setToken(null);
-                        tokenRef.current = null;
-                    }
                 }
             } finally {
                 if (isMounted) setIsLoading(false);
@@ -478,7 +391,7 @@ const useTrafficData = (options) => {
         }
 
         return () => { isMounted = false; };
-    }, [startDate, endDate, performLogin, fetchTrafficData, defaultRange, refreshInterval]); 
+    }, [startDate, endDate, fetchTrafficData, defaultRange, refreshInterval]);
 
     return { isLoading, error, chartData, stationSummary, totalTransactions, percentageChange, peakHours, yesterdayTotal };
 };
